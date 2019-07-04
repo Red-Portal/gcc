@@ -791,39 +791,6 @@ vn_reference_eq (const_vn_reference_t const vr1, const_vn_reference_t const vr2)
 static void
 copy_reference_ops_from_ref (tree ref, vec<vn_reference_op_s> *result)
 {
-  if (TREE_CODE (ref) == TARGET_MEM_REF)
-    {
-      vn_reference_op_s temp;
-
-      result->reserve (3);
-
-      memset (&temp, 0, sizeof (temp));
-      temp.type = TREE_TYPE (ref);
-      temp.opcode = TREE_CODE (ref);
-      temp.op0 = TMR_INDEX (ref);
-      temp.op1 = TMR_STEP (ref);
-      temp.op2 = TMR_OFFSET (ref);
-      temp.off = -1;
-      temp.clique = MR_DEPENDENCE_CLIQUE (ref);
-      temp.base = MR_DEPENDENCE_BASE (ref);
-      result->quick_push (temp);
-
-      memset (&temp, 0, sizeof (temp));
-      temp.type = NULL_TREE;
-      temp.opcode = ERROR_MARK;
-      temp.op0 = TMR_INDEX2 (ref);
-      temp.off = -1;
-      result->quick_push (temp);
-
-      memset (&temp, 0, sizeof (temp));
-      temp.type = NULL_TREE;
-      temp.opcode = TREE_CODE (TMR_BASE (ref));
-      temp.op0 = TMR_BASE (ref);
-      temp.off = -1;
-      result->quick_push (temp);
-      return;
-    }
-
   /* For non-calls, store the information that makes up the address.  */
   tree orig = ref;
   while (ref)
@@ -852,6 +819,20 @@ copy_reference_ops_from_ref (tree ref, vec<vn_reference_op_s> *result)
 	  temp.clique = MR_DEPENDENCE_CLIQUE (ref);
 	  temp.base = MR_DEPENDENCE_BASE (ref);
 	  temp.reverse = REF_REVERSE_STORAGE_ORDER (ref);
+	  break;
+	case TARGET_MEM_REF:
+	  /* The base address gets its own vn_reference_op_s structure.  */
+	  temp.op0 = TMR_INDEX (ref);
+	  temp.op1 = TMR_STEP (ref);
+	  temp.op2 = TMR_OFFSET (ref);
+	  temp.clique = MR_DEPENDENCE_CLIQUE (ref);
+	  temp.base = MR_DEPENDENCE_BASE (ref);
+	  result->safe_push (temp);
+	  memset (&temp, 0, sizeof (temp));
+	  temp.type = NULL_TREE;
+	  temp.opcode = ERROR_MARK;
+	  temp.op0 = TMR_INDEX2 (ref);
+	  temp.off = -1;
 	  break;
 	case BIT_FIELD_REF:
 	  /* Record bits, position and storage order.  */
@@ -6872,14 +6853,24 @@ class pass_fre : public gimple_opt_pass
 {
 public:
   pass_fre (gcc::context *ctxt)
-    : gimple_opt_pass (pass_data_fre, ctxt)
+    : gimple_opt_pass (pass_data_fre, ctxt), may_iterate (true)
   {}
 
   /* opt_pass methods: */
   opt_pass * clone () { return new pass_fre (m_ctxt); }
-  virtual bool gate (function *) { return flag_tree_fre != 0; }
+  void set_pass_param (unsigned int n, bool param)
+    {
+      gcc_assert (n == 0);
+      may_iterate = param;
+    }
+  virtual bool gate (function *)
+    {
+      return flag_tree_fre != 0 && (may_iterate || optimize > 1);
+    }
   virtual unsigned int execute (function *);
 
+private:
+  bool may_iterate;
 }; // class pass_fre
 
 unsigned int
@@ -6888,15 +6879,16 @@ pass_fre::execute (function *fun)
   unsigned todo = 0;
 
   /* At -O[1g] use the cheap non-iterating mode.  */
+  bool iterate_p = may_iterate && (optimize > 1);
   calculate_dominance_info (CDI_DOMINATORS);
-  if (optimize > 1)
+  if (iterate_p)
     loop_optimizer_init (AVOID_CFG_MODIFICATIONS);
 
   default_vn_walk_kind = VN_WALKREWRITE;
-  todo = do_rpo_vn (fun, NULL, NULL, optimize > 1, true);
+  todo = do_rpo_vn (fun, NULL, NULL, iterate_p, true);
   free_rpo_vn ();
 
-  if (optimize > 1)
+  if (iterate_p)
     loop_optimizer_finalize ();
 
   return todo;
