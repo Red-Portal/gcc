@@ -447,7 +447,7 @@ struct gomp_task
   /* Parent of this task.  */
   struct gomp_task *parent;
   /* Children of this task.  */
-  struct priority_queue children_queue;
+  /* struct priority_queue children_queue; */
   /* Taskgroup this task belongs in.  */
   struct gomp_taskgroup *taskgroup;
   /* Tasks that depend on this task.  */
@@ -460,6 +460,9 @@ struct gomp_task
      0, we have no unsatisfied dependencies, and this task can be put
      into the various queues to be scheduled.  */
   size_t num_dependees;
+
+  /* Number of childrens created from this task. */
+  size_t num_children;
 
   /* Priority of this task.  */
   int priority;
@@ -491,7 +494,7 @@ struct gomp_taskgroup
 {
   struct gomp_taskgroup *prev;
   /* Queue of tasks that belong in this taskgroup.  */
-  struct priority_queue taskgroup_queue;
+  /* struct priority_queue taskgroup_queue; */
   uintptr_t *reductions;
   bool in_taskgroup_wait;
   bool cancelled;

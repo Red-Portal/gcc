@@ -216,13 +216,13 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		task_step -= step;
 	      fn (arg);
 	      arg += arg_size;
-	      if (!priority_queue_empty_p (&task[i].children_queue,
-					   MEMMODEL_RELAXED))
-		{
-		  gomp_mutex_lock (&team->task_lock);
-		  gomp_clear_parent (&task[i].children_queue);
-		  gomp_mutex_unlock (&team->task_lock);
-		}
+	      /* if (!priority_queue_empty_p (&task[i].children_queue, */
+	      /* 				   MEMMODEL_RELAXED)) */
+	      /* 	{ */
+	      /* 	  gomp_mutex_lock (&team->task_lock); */
+	      /* 	  gomp_clear_parent (&task[i].children_queue); */
+	      /* 	  gomp_mutex_unlock (&team->task_lock); */
+	      /* 	} */
 	      gomp_end_task ();
 	    }
 	}
@@ -248,13 +248,13 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    if (i == nfirst)
 	      task_step -= step;
 	    fn (data);
-	    if (!priority_queue_empty_p (&task.children_queue,
-					 MEMMODEL_RELAXED))
-	      {
-		gomp_mutex_lock (&team->task_lock);
-		gomp_clear_parent (&task.children_queue);
-		gomp_mutex_unlock (&team->task_lock);
-	      }
+	    /* if (!priority_queue_empty_p (&task.children_queue, */
+	    /* 				 MEMMODEL_RELAXED)) */
+	    /*   { */
+	    /* 	gomp_mutex_lock (&team->task_lock); */
+	    /* 	gomp_clear_parent (&task.children_queue); */
+	    /* 	gomp_mutex_unlock (&team->task_lock); */
+	    /*   } */
 	    gomp_end_task ();
 	  }
     }
@@ -329,19 +329,20 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	}
       if (taskgroup)
 	taskgroup->num_children += num_tasks;
+      parent->num_children += num_tasks;
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
-	  priority_queue_insert (PQ_CHILDREN, &parent->children_queue,
-				 task, priority,
-				 PRIORITY_INSERT_BEGIN,
-				 /*last_parent_depends_on=*/false,
-				 task->parent_depends_on);
-	  if (taskgroup)
-	    priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue,
-				   task, priority, PRIORITY_INSERT_BEGIN,
-				   /*last_parent_depends_on=*/false,
-				   task->parent_depends_on);
+	  /* priority_queue_insert (PQ_CHILDREN, &parent->children_queue, */
+	  /* 			 task, priority, */
+	  /* 			 PRIORITY_INSERT_BEGIN, */
+	  /* 			 /\*last_parent_depends_on=*\/false, */
+	  /* 			 task->parent_depends_on); */
+	  /* if (taskgroup) */
+	  /*   priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
+	  /* 			   task, priority, PRIORITY_INSERT_BEGIN, */
+	  /* 			   /\*last_parent_depends_on=*\/false, */
+	  /* 			   task->parent_depends_on); */
 	  priority_queue_insert (PQ_TEAM, &team->task_queue, task, priority,
 				 PRIORITY_INSERT_END,
 				 /*last_parent_depends_on=*/false,
