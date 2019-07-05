@@ -622,11 +622,11 @@ package Sem_Util is
    --  private components of protected objects, but is generally useful when
    --  restriction No_Implicit_Heap_Allocation is active.
 
-   function Dynamic_Accessibility_Level (Expr : Node_Id) return Node_Id;
-   --  Expr should be an expression of an access type. Builds an integer
-   --  literal except in cases involving anonymous access types, where
-   --  accessibility levels are tracked at run time (access parameters and
-   --  Ada 2012 stand-alone objects).
+   function Dynamic_Accessibility_Level (N : Node_Id) return Node_Id;
+   --  N should be an expression of an access type. Builds an integer literal
+   --  except in cases involving anonymous access types, where accessibility
+   --  levels are tracked at run time (access parameters and Ada 2012 stand-
+   --  alone objects).
 
    function Effective_Extra_Accessibility (Id : Entity_Id) return Entity_Id;
    --  Same as Einfo.Extra_Accessibility except thtat object renames
@@ -1409,6 +1409,9 @@ package Sem_Util is
    function In_Pre_Post_Condition (N : Node_Id) return Boolean;
    --  Returns True if node N appears within a pre/postcondition pragma. Note
    --  the pragma Check equivalents are NOT considered.
+
+   function In_Quantified_Expression (N : Node_Id) return Boolean;
+   --  Returns true if the expression N occurs within a quantified expression
 
    function In_Reverse_Storage_Order_Object (N : Node_Id) return Boolean;
    --  Returns True if N denotes a component or subcomponent in a record or

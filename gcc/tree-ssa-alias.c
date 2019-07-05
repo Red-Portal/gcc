@@ -105,6 +105,7 @@ static struct {
   unsigned HOST_WIDE_INT nonoverlapping_component_refs_p_may_alias;
   unsigned HOST_WIDE_INT nonoverlapping_component_refs_p_no_alias;
   unsigned HOST_WIDE_INT nonoverlapping_component_refs_since_match_p_may_alias;
+  unsigned HOST_WIDE_INT nonoverlapping_component_refs_since_match_p_must_overlap;
   unsigned HOST_WIDE_INT nonoverlapping_component_refs_since_match_p_no_alias;
 } alias_stats;
 
@@ -138,10 +139,13 @@ dump_alias_stats (FILE *s)
 	   + alias_stats.nonoverlapping_component_refs_p_may_alias);
   fprintf (s, "  nonoverlapping_component_refs_since_match_p: "
 	   HOST_WIDE_INT_PRINT_DEC" disambiguations, "
+	   HOST_WIDE_INT_PRINT_DEC" must overlaps, "
 	   HOST_WIDE_INT_PRINT_DEC" queries\n",
 	   alias_stats.nonoverlapping_component_refs_since_match_p_no_alias,
+	   alias_stats.nonoverlapping_component_refs_since_match_p_must_overlap,
 	   alias_stats.nonoverlapping_component_refs_since_match_p_no_alias
-	   + alias_stats.nonoverlapping_component_refs_since_match_p_may_alias);
+	   + alias_stats.nonoverlapping_component_refs_since_match_p_may_alias
+	   + alias_stats.nonoverlapping_component_refs_since_match_p_must_overlap);
   fprintf (s, "  aliasing_component_refs_p: "
 	   HOST_WIDE_INT_PRINT_DEC" disambiguations, "
 	   HOST_WIDE_INT_PRINT_DEC" queries\n",
@@ -1149,19 +1153,28 @@ static int
 nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
 					     tree match2, tree ref2)
 {
+  /* Early return if there are no references to match, we do not need
+     to walk the access paths.
+
+     Do not consider this as may-alias for stats - it is more useful
+     to have information how many disambiguations happened provided that
+     the query was meaningful.  */
+
+  if (match1 == ref1 || !handled_component_p (ref1)
+      || match2 == ref2 || !handled_component_p (ref2))
+    return -1;
+
   auto_vec<tree, 16> component_refs1;
   auto_vec<tree, 16> component_refs2;
 
   /* Create the stack of handled components for REF1.  */
-  while (handled_component_p (ref1))
+  while (handled_component_p (ref1) && ref1 != match1)
     {
       if (TREE_CODE (ref1) == VIEW_CONVERT_EXPR
 	  || TREE_CODE (ref1) == BIT_FIELD_REF)
 	component_refs1.truncate (0);
       else
         component_refs1.safe_push (ref1);
-      if (ref1 == match1)
-	break;
       ref1 = TREE_OPERAND (ref1, 0);
     }
   if (TREE_CODE (ref1) == MEM_REF && ref1 != match1)
@@ -1180,15 +1193,13 @@ nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
     }
 
   /* Create the stack of handled components for REF2.  */
-  while (handled_component_p (ref2))
+  while (handled_component_p (ref2) && ref2 != match2)
     {
       if (TREE_CODE (ref2) == VIEW_CONVERT_EXPR
 	  || TREE_CODE (ref2) == BIT_FIELD_REF)
 	component_refs2.truncate (0);
       else
         component_refs2.safe_push (ref2);
-      if (ref2 == match2)
-	break;
       ref2 = TREE_OPERAND (ref2, 0);
     }
   if (TREE_CODE (ref2) == MEM_REF && ref2 != match2)
@@ -1218,7 +1229,7 @@ nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
 	  if (component_refs1.is_empty ())
 	    {
 	      ++alias_stats
-		.nonoverlapping_component_refs_since_match_p_may_alias;
+		.nonoverlapping_component_refs_since_match_p_must_overlap;
 	      return 0;
 	    }
 	  ref1 = component_refs1.pop ();
@@ -1230,7 +1241,7 @@ nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
 	  if (component_refs2.is_empty ())
 	    {
 	      ++alias_stats
-		.nonoverlapping_component_refs_since_match_p_may_alias;
+		.nonoverlapping_component_refs_since_match_p_must_overlap;
 	      return 0;
 	    }
 	  ref2 = component_refs2.pop ();
@@ -1270,7 +1281,7 @@ nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
 	      || DECL_BIT_FIELD_REPRESENTATIVE (field2) == field1)
 	    {
 	      ++alias_stats
-		.nonoverlapping_component_refs_since_match_p_may_alias;
+		.nonoverlapping_component_refs_since_match_p_must_overlap;
 	      return 0;
 	    }
 	  /* Different fields of the same record type cannot overlap.
@@ -1278,7 +1289,7 @@ nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
 	  if (DECL_BIT_FIELD (field1) && DECL_BIT_FIELD (field2))
 	    {
 	      ++alias_stats
-		.nonoverlapping_component_refs_since_match_p_may_alias;
+		.nonoverlapping_component_refs_since_match_p_must_overlap;
 	      return 0;
 	    }
 	  ++alias_stats.nonoverlapping_component_refs_since_match_p_no_alias;
@@ -1286,7 +1297,7 @@ nonoverlapping_component_refs_since_match_p (tree match1, tree ref1,
 	}
     }
 
-  ++alias_stats.nonoverlapping_component_refs_since_match_p_may_alias;
+  ++alias_stats.nonoverlapping_component_refs_since_match_p_must_overlap;
   return 0;
 }
 
@@ -1313,14 +1324,16 @@ ncr_compar (const void *field1_, const void *field2_)
 static bool
 nonoverlapping_component_refs_p (const_tree x, const_tree y)
 {
+  /* Early return if we have nothing to do.
+
+     Do not consider this as may-alias for stats - it is more useful
+     to have information how many disambiguations happened provided that
+     the query was meaningful.  */
   if (!flag_strict_aliasing
       || !x || !y
       || !handled_component_p (x)
       || !handled_component_p (y))
-    {
-      ++alias_stats.nonoverlapping_component_refs_p_may_alias;
-      return false;
-    }
+    return false;
 
   auto_vec<const_tree, 16> fieldsx;
   while (handled_component_p (x))
@@ -1452,8 +1465,10 @@ nonoverlapping_component_refs_p (const_tree x, const_tree y)
 static bool
 decl_refs_may_alias_p (tree ref1, tree base1,
 		       poly_int64 offset1, poly_int64 max_size1,
+		       poly_int64 size1,
 		       tree ref2, tree base2,
-		       poly_int64 offset2, poly_int64 max_size2)
+		       poly_int64 offset2, poly_int64 max_size2,
+		       poly_int64 size2)
 {
   gcc_checking_assert (DECL_P (base1) && DECL_P (base2));
 
@@ -1465,6 +1480,10 @@ decl_refs_may_alias_p (tree ref1, tree base1,
      the accesses do not overlap.  */
   if (!ranges_maybe_overlap_p (offset1, max_size1, offset2, max_size2))
     return false;
+
+  /* If there is must alias, there is no use disambiguating further.  */
+  if (known_eq (size1, max_size1) && known_eq (size2, max_size2))
+    return true;
 
   /* For components with variable position, the above test isn't sufficient,
      so we disambiguate component references manually.  */
@@ -1487,10 +1506,12 @@ decl_refs_may_alias_p (tree ref1, tree base1,
 static bool
 indirect_ref_may_alias_decl_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
 			       poly_int64 offset1, poly_int64 max_size1,
+			       poly_int64 size1,
 			       alias_set_type ref1_alias_set,
 			       alias_set_type base1_alias_set,
 			       tree ref2 ATTRIBUTE_UNUSED, tree base2,
 			       poly_int64 offset2, poly_int64 max_size2,
+			       poly_int64 size2,
 			       alias_set_type ref2_alias_set,
 			       alias_set_type base2_alias_set, bool tbaa_p)
 {
@@ -1598,7 +1619,19 @@ indirect_ref_may_alias_decl_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
       && (TREE_CODE (TREE_TYPE (base1)) != ARRAY_TYPE
 	  || (TYPE_SIZE (TREE_TYPE (base1))
 	      && TREE_CODE (TYPE_SIZE (TREE_TYPE (base1))) == INTEGER_CST)))
-    return ranges_maybe_overlap_p (doffset1, max_size1, doffset2, max_size2);
+    {
+      if (!ranges_maybe_overlap_p (doffset1, max_size1, doffset2, max_size2))
+	return false;
+      if (!ref1 || !ref2
+	  /* If there is must alias, there is no use disambiguating further.  */
+	  || (known_eq (size1, max_size1) && known_eq (size2, max_size2)))
+	return true;
+      int res = nonoverlapping_component_refs_since_match_p (base1, ref1,
+							     base2, ref2);
+      if (res == -1)
+	return !nonoverlapping_component_refs_p (ref1, ref2);
+      return !res;
+    }
 
   /* Do access-path based disambiguation.  */
   if (ref1 && ref2
@@ -1623,10 +1656,12 @@ indirect_ref_may_alias_decl_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
 static bool
 indirect_refs_may_alias_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
 			   poly_int64 offset1, poly_int64 max_size1,
+			   poly_int64 size1,
 			   alias_set_type ref1_alias_set,
 			   alias_set_type base1_alias_set,
 			   tree ref2 ATTRIBUTE_UNUSED, tree base2,
 			   poly_int64 offset2, poly_int64 max_size2,
+			   poly_int64 size2,
 			   alias_set_type ref2_alias_set,
 			   alias_set_type base2_alias_set, bool tbaa_p)
 {
@@ -1671,6 +1706,9 @@ indirect_refs_may_alias_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
       if (!ranges_maybe_overlap_p (offset1 + moff1, max_size1,
 				   offset2 + moff2, max_size2))
 	return false;
+      /* If there is must alias, there is no use disambiguating further.  */
+      if (known_eq (size1, max_size1) && known_eq (size2, max_size2))
+	return true;
       if (ref1 && ref2)
 	{
 	  int res = nonoverlapping_component_refs_since_match_p (NULL, ref1,
@@ -1717,7 +1755,18 @@ indirect_refs_may_alias_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
          can overlap by an exact multiple of their element size.
          See gcc.dg/torture/alias-2.c.  */
       && TREE_CODE (TREE_TYPE (ptrtype1)) != ARRAY_TYPE)
-    return ranges_maybe_overlap_p (offset1, max_size1, offset2, max_size2);
+    {
+      if (!ranges_maybe_overlap_p (offset1, max_size1, offset2, max_size2))
+	return false;
+      if (!ref1 || !ref2
+	  || (known_eq (size1, max_size1) && known_eq (size2, max_size2)))
+	return true;
+      int res = nonoverlapping_component_refs_since_match_p (base1, ref1,
+							     base2, ref2);
+      if (res == -1)
+	return !nonoverlapping_component_refs_p (ref1, ref2);
+      return !res;
+    }
 
   /* Do access-path based disambiguation.  */
   if (ref1 && ref2
@@ -1802,7 +1851,9 @@ refs_may_alias_p_2 (ao_ref *ref1, ao_ref *ref2, bool tbaa_p)
   var2_p = DECL_P (base2);
   if (var1_p && var2_p)
     return decl_refs_may_alias_p (ref1->ref, base1, offset1, max_size1,
-				  ref2->ref, base2, offset2, max_size2);
+				  ref1->size,
+				  ref2->ref, base2, offset2, max_size2,
+				  ref2->size);
 
   /* Handle restrict based accesses.
      ???  ao_ref_base strips inner MEM_REF [&decl], recover from that
@@ -1870,21 +1921,21 @@ refs_may_alias_p_2 (ao_ref *ref1, ao_ref *ref2, bool tbaa_p)
   /* Dispatch to the pointer-vs-decl or pointer-vs-pointer disambiguators.  */
   if (var1_p && ind2_p)
     return indirect_ref_may_alias_decl_p (ref2->ref, base2,
-					  offset2, max_size2,
+					  offset2, max_size2, ref2->size,
 					  ao_ref_alias_set (ref2),
 					  ao_ref_base_alias_set (ref2),
 					  ref1->ref, base1,
-					  offset1, max_size1,
+					  offset1, max_size1, ref1->size,
 					  ao_ref_alias_set (ref1),
 					  ao_ref_base_alias_set (ref1),
 					  tbaa_p);
   else if (ind1_p && ind2_p)
     return indirect_refs_may_alias_p (ref1->ref, base1,
-				      offset1, max_size1,
+				      offset1, max_size1, ref1->size,
 				      ao_ref_alias_set (ref1),
 				      ao_ref_base_alias_set (ref1),
 				      ref2->ref, base2,
-				      offset2, max_size2,
+				      offset2, max_size2, ref2->size,
 				      ao_ref_alias_set (ref2),
 				      ao_ref_base_alias_set (ref2),
 				      tbaa_p);
@@ -3003,8 +3054,8 @@ stmt_kills_ref_p (gimple *stmt, tree ref)
 
 static bool
 maybe_skip_until (gimple *phi, tree &target, basic_block target_bb,
-		  ao_ref *ref, tree vuse, unsigned int &limit, bitmap *visited,
-		  bool abort_on_visited,
+		  ao_ref *ref, tree vuse, bool tbaa_p, unsigned int &limit,
+		  bitmap *visited, bool abort_on_visited,
 		  void *(*translate)(ao_ref *, tree, void *, bool *),
 		  void *data)
 {
@@ -3038,7 +3089,7 @@ maybe_skip_until (gimple *phi, tree &target, basic_block target_bb,
 	  /* An already visited PHI node ends the walk successfully.  */
 	  if (bitmap_bit_p (*visited, SSA_NAME_VERSION (PHI_RESULT (def_stmt))))
 	    return !abort_on_visited;
-	  vuse = get_continuation_for_phi (def_stmt, ref, limit,
+	  vuse = get_continuation_for_phi (def_stmt, ref, tbaa_p, limit,
 					   visited, abort_on_visited,
 					   translate, data);
 	  if (!vuse)
@@ -3053,7 +3104,7 @@ maybe_skip_until (gimple *phi, tree &target, basic_block target_bb,
 	  if ((int)limit <= 0)
 	    return false;
 	  --limit;
-	  if (stmt_may_clobber_ref_p_1 (def_stmt, ref))
+	  if (stmt_may_clobber_ref_p_1 (def_stmt, ref, tbaa_p))
 	    {
 	      bool disambiguate_only = true;
 	      if (translate
@@ -3085,7 +3136,7 @@ maybe_skip_until (gimple *phi, tree &target, basic_block target_bb,
    Returns NULL_TREE if no suitable virtual operand can be found.  */
 
 tree
-get_continuation_for_phi (gimple *phi, ao_ref *ref,
+get_continuation_for_phi (gimple *phi, ao_ref *ref, bool tbaa_p,
 			  unsigned int &limit, bitmap *visited,
 			  bool abort_on_visited,
 			  void *(*translate)(ao_ref *, tree, void *, bool *),
@@ -3128,7 +3179,8 @@ get_continuation_for_phi (gimple *phi, ao_ref *ref,
       arg1 = PHI_ARG_DEF (phi, i);
       if (arg1 == arg0)
 	;
-      else if (! maybe_skip_until (phi, arg0, dom, ref, arg1, limit, visited,
+      else if (! maybe_skip_until (phi, arg0, dom, ref, arg1, tbaa_p,
+				   limit, visited,
 				   abort_on_visited,
 				   /* Do not translate when walking over
 				      backedges.  */
@@ -3172,7 +3224,7 @@ get_continuation_for_phi (gimple *phi, ao_ref *ref,
    TODO: Cache the vector of equivalent vuses per ref, vuse pair.  */
 
 void *
-walk_non_aliased_vuses (ao_ref *ref, tree vuse,
+walk_non_aliased_vuses (ao_ref *ref, tree vuse, bool tbaa_p,
 			void *(*walker)(ao_ref *, tree, void *),
 			void *(*translate)(ao_ref *, tree, void *, bool *),
 			tree (*valueize)(tree),
@@ -3213,7 +3265,7 @@ walk_non_aliased_vuses (ao_ref *ref, tree vuse,
       if (gimple_nop_p (def_stmt))
 	break;
       else if (gimple_code (def_stmt) == GIMPLE_PHI)
-	vuse = get_continuation_for_phi (def_stmt, ref, limit,
+	vuse = get_continuation_for_phi (def_stmt, ref, tbaa_p, limit,
 					 &visited, translated, translate, data);
       else
 	{
@@ -3223,7 +3275,7 @@ walk_non_aliased_vuses (ao_ref *ref, tree vuse,
 	      break;
 	    }
 	  --limit;
-	  if (stmt_may_clobber_ref_p_1 (def_stmt, ref))
+	  if (stmt_may_clobber_ref_p_1 (def_stmt, ref, tbaa_p))
 	    {
 	      if (!translate)
 		break;

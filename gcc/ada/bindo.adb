@@ -23,16 +23,19 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Binde;
+with Debug; use Debug;
+
 with Bindo.Elaborators;
-use  Bindo.Elaborators.Invocation_And_Library_Graph_Elaborators;
+use  Bindo.Elaborators;
 
 package body Bindo is
 
    ---------------------------------
-   -- Elaboration order mechanism --
+   -- Elaboration-order mechanism --
    ---------------------------------
 
-   --  The elaboration order (EO) mechanism implemented in this unit and its
+   --  The elaboration-order (EO) mechanism implemented in this unit and its
    --  children has the following objectives:
    --
    --    * Find an ordering of all library items (historically referred to as
@@ -47,36 +50,52 @@ package body Bindo is
    --        - The flow of execution at elaboration time.
    --
    --        - Additional dependencies between units supplied to the binder by
-   --          means of a file.
+   --          means of a forced-elaboration-order file.
    --
-   --      The high-level idea is to construct two graphs:
+   --      The high-level idea empoyed by the EO mechanism is to construct two
+   --      graphs and use the information they represent to find an ordering of
+   --      all units.
    --
-   --        - Invocation graph - Models the flow of execution at elaboration
-   --          time.
+   --      The invocation graph represents the flow of execution at elaboration
+   --      time.
    --
-   --        - Library graph - Represents with clause and pragma dependencies
-   --          between units.
+   --      The library graph captures the dependencies between units expressed
+   --      by with clause and elaboration-related pragmas. The library graph is
+   --      further augmented with additional information from the invocation
+   --      graph by exploring the execution paths from a unit with elaboration
+   --      code to other external units.
    --
-   --      The library graph is further augmented with additional information
-   --      from the invocation graph by exploring the execution paths from a
-   --      unit with elaboration code to other external units. All strongly
-   --      connected components of the library graph are discovered. Finally,
-   --      the order is obtained via a topological sort-like algorithm which
-   --      attempts to order available units while enabling other units to be
+   --      The strongly connected components of the library graph are computed.
+   --
+   --      The order is obtained using a topological sort-like algorithm which
+   --      traverses the library graph and its strongly connected components in
+   --      an attempt to order available units while enabling other units to be
    --      ordered.
    --
    --    * Diagnose elaboration circularities between units
    --
-   --      The library graph may contain at least one cycle, in which case no
-   --      ordering is possible.
+   --      An elaboration circularity arrises when either
    --
-   --      ??? more on this later
+   --        - At least one unit cannot be ordered, or
+   --
+   --        - All units can be ordered, but an edge with an Elaborate_All
+   --          pragma links two vertices within the same component of the
+   --          library graph.
+   --
+   --      The library graph is traversed to discover, collect, and sort all
+   --      cycles that hinder the elaboration order.
+   --
+   --      The most important cycle is diagnosed by describing its effects on
+   --      the elaboration order and listing all units comprising the circuit.
+   --      Various suggestions on how to break the cycle are offered.
 
    -----------------
    -- Terminology --
    -----------------
 
    --  * Component - A strongly connected component of a graph.
+   --
+   --  * Elaboration circularity - A cycle involving units from the bind.
    --
    --  * Elaboration root - A special invocation construct which denotes the
    --    elaboration procedure of a unit.
@@ -162,7 +181,11 @@ package body Bindo is
    --          |
    --  +------ | -------------- Diagnostics phase -------------------------+
    --  |       |                                                           |
-   --  |       +--> ??? more on this later                                 |
+   --  |       +--> Find_Cycles                                            |
+   --  |       +--> Validate_Cycles                                        |
+   --  |       +--> Write_Cycles                                           |
+   --  |       |                                                           |
+   --  |       +--> Diagnose_Cycle / Diagnose_All_Cycles                   |
    --  |                                                                   |
    --  +-------------------------------------------------------------------+
 
@@ -225,7 +248,37 @@ package body Bindo is
    -- Diagnostics phase --
    -----------------------
 
-   --  ??? more on this later
+   --  The Diagnostics phase has the following objectives:
+   --
+   --    * Discover, save, and sort all cycles in the library graph. The cycles
+   --      are sorted based on the following heiristics:
+   --
+   --        - A cycle with higher precedence is preferred.
+   --
+   --        - A cycle with fewer invocation edges is preferred.
+   --
+   --        - A cycle with a shorter length is preferred.
+   --
+   --    * Validate the consistency of cycles, only when switch -d_V is in
+   --      effect.
+   --
+   --    * Write the contents of all cycles in human-readable form to standard
+   --      output when switch -d_O is in effect.
+   --
+   --    * Diagnose the most important cycle, or all cycles when switch -d_C is
+   --      in effect. The diagnostic consists of:
+   --
+   --        - The reason for the existance of the cycle, along with the unit
+   --          whose elaboration cannot be guaranteed.
+   --
+   --        - A detailed traceback of the cycle, showcasing the transition
+   --          between units, along with any other elaboration-order-related
+   --          information.
+   --
+   --        - A set of suggestions on how to break the cycle considering the
+   --          the edges coprising the circuit, the elaboration model used to
+   --          compile the units, the availability of invocation information,
+   --          and the state of various relevant switches.
 
    --------------
    -- Switches --
@@ -235,6 +288,11 @@ package body Bindo is
    --
    --        GNATbind outputs the contents of ALI table Invocation_Constructs
    --        and Invocation_Edges in textual format to standard output.
+   --
+   --  -d_C  Diagnose all cycles
+   --
+   --        GNATbind outputs diagnostics for all unique cycles in the bind,
+   --        rather than just the most important one.
    --
    --  -d_I  Output invocation graph
    --
@@ -250,27 +308,140 @@ package body Bindo is
    --
    --        GNATbind utilizes the new bindo elaboration order
    --
-   --  -d_O  Output elaboration order
+   --  -d_P  Output cycle paths
+   --
+   --        GNATbind output the cycle paths in text format to standard output
+   --
+   --  -d_T  Output elaboration-order trace information
+   --
+   --        GNATbind outputs trace information on elaboration-order and cycle-
+   --        detection activities to standard output.
+   --
+   --  -d_V  Validate bindo cycles, graphs, and order
+   --
+   --        GNATbind validates the invocation graph, library graph along with
+   --        its cycles, and elaboration order by detecting inconsistencies and
+   --        producing error reports.
+   --
+   --  -e    Output complete list of elaboration-order dependencies
+   --
+   --        GNATbind outputs the dependencies between units to standard
+   --        output.
+   --
+   --  -f    Force elaboration order from given file
+   --
+   --        GNATbind applies an additional set of edges to the library graph.
+   --        The edges are read from a file specified by the argument of the
+   --        flag.
+   --
+   --  -H    Legacy elaboration-order model enabled
+   --
+   --        GNATbind uses the library-graph and heuristics-based elaboration-
+   --        order model.
+   --
+   --  -l    Output chosen elaboration order
    --
    --        GNATbind outputs the elaboration order in text format to standard
    --        output.
    --
-   --  -d_T  Output elaboration order trace information
+   --  -p    Pessimistic (worst-case) elaboration order
    --
-   --        GNATbind outputs trace information on elaboration order activities
-   --        to standard output.
-   --
-   --  -d_V  Validate bindo graphs and order
-   --
-   --        GNATbind validates the invocation graph, library graph, SCC graph
-   --        and elaboration order by detecting inconsistencies and producing
-   --        error reports.
+   --        This switch is not used in Bindo and its children.
 
    ----------------------------------------
-   -- Debugging elaboration order issues --
+   -- Debugging elaboration-order issues --
    ----------------------------------------
 
-   --  ??? more on this later
+   --  Prior to debugging elaboration-order-related issues, enable all relevant
+   --  debug flags to collect as much information as possible. Depending on the
+   --  number of files in the bind, Bindo may emit anywhere between several MBs
+   --  to several hundred MBs of data to standard output. The switches are:
+   --
+   --    -d_A -d_C -d_I -d_L -d_P -d_T -d_V
+   --
+   --  Bindo offers several debugging routines that can be invoked from gdb.
+   --  Those are defined in the body of Bindo.Writers, in sections denoted by
+   --  header Debug. For quick reference, the routines are:
+   --
+   --    palgc  --  print all library-graph cycles
+   --    pau    --  print all units
+   --    pc     --  print component
+   --    pige   --  print invocation-graph edge
+   --    pigv   --  print invocation-graph vertex
+   --    plgc   --  print library-graph cycle
+   --    plge   --  print library-graph edge
+   --    plgv   --  print library-graph vertex
+   --    pu     --  print units
+   --
+   --  * Invalid elaboration order
+   --
+   --    The elaboration order is invalid when:
+   --
+   --      - A unit that requires elaboration is missing from the order
+   --      - A unit that does not require elaboration is present in the order
+   --
+   --    Examine the output of the elaboration algorithm available via switch
+   --    -d_T to determine how the related units were included in or excluded
+   --    from the order. Determine whether the library graph contains all the
+   --    relevant edges for those units.
+   --
+   --    Units and routines of interest:
+   --      Bindo.Elaborators
+   --      Elaborate_Library_Graph
+   --      Elaborate_Units_Common
+   --      Elaborate_Units_Dynamic
+   --      Elaborate_Units_Static
+   --
+   --  * Invalid invocation graph
+   --
+   --    The invocation graph is invalid when:
+   --
+   --      - An edge lacks an attribute
+   --      - A vertex lacks an attribute
+   --
+   --    Find the malformed edge or vertex and determine which attribute is
+   --    missing. Examine the contents of the invocation-related ALI tables
+   --    available via switch -d_A. If the invocation construct or relation
+   --    is missing, verify the ALI file. If the ALI lacks all the relevant
+   --    information, then Sem_Elab most likely failed to discover a valid
+   --    elaboration path.
+   --
+   --    Units and routines of interest:
+   --      Bindo.Builders
+   --      Bindo.Graphs
+   --      Add_Edge
+   --      Add_Vertex
+   --      Build_Invocation_Graph
+   --
+   --  * Invalid library graph
+   --
+   --    The library graph is invalid when:
+   --
+   --      - An edge lacks an attribute
+   --      - A vertex lacks an attribute
+   --
+   --    Find the malformed edge or vertex and determine which attribute is
+   --    missing.
+   --
+   --    Units and routines of interest:
+   --      Bindo.Builders
+   --      Bindo.Graphs
+   --      Add_Edge
+   --      Add_Vertex
+   --      Build_Library_Graph
+   --
+   --  * Invalid library-graph cycle
+   --
+   --    A library-graph cycle is invalid when:
+   --
+   --      - It lacks enough edges to form a circuit
+   --      - At least one edge in the circuit is repeated
+   --
+   --    Find the malformed cycle and determine which attribute is missing.
+   --
+   --    Units and routines of interest:
+   --      Bindo.Graphs
+   --      Find_Cycles
 
    ----------------------------
    -- Find_Elaboration_Order --
@@ -281,7 +452,41 @@ package body Bindo is
       Main_Lib_File : File_Name_Type)
    is
    begin
-      Elaborate_Units (Order, Main_Lib_File);
+      --  ??? Enable the following code when switching from the old to the new
+      --  elaboration-order mechanism.
+
+      --  Use the library graph and heuristic-based elaboration order when
+      --  switch -H (legacy elaboration-order mode enabled).
+
+      --  if Legacy_Elaboration_Order then
+      --     Binde.Find_Elab_Order (Order, Main_Lib_File);
+
+      --  Otherwise use the invocation and library-graph-based elaboration
+      --  order.
+
+      --  else
+      --     Invocation_And_Library_Graph_Elaborators.Elaborate_Units
+      --       (Order         => Order,
+      --        Main_Lib_File => Main_Lib_File);
+      --  end if;
+
+      --  ??? Remove the following code when switching from the old to the new
+      --  elaboration-order mechanism.
+
+      --  Use the invocation and library-graph-based elaboration order when
+      --  switch -d_N (new bindo order) is in effect.
+
+      if Debug_Flag_Underscore_NN then
+         Invocation_And_Library_Graph_Elaborators.Elaborate_Units
+           (Order         => Order,
+            Main_Lib_File => Main_Lib_File);
+
+      --  Otherwise use the library-graph and heuristic-based elaboration
+      --  order.
+
+      else
+         Binde.Find_Elab_Order (Order, Main_Lib_File);
+      end if;
    end Find_Elaboration_Order;
 
 end Bindo;

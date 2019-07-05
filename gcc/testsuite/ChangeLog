@@ -1,3 +1,146 @@
+2019-07-04  Marek Polacek  <polacek@redhat.com>
+
+	DR 1813
+	PR c++/83374 - __is_standard_layout wrong for a class with repeated bases.
+	* g++.dg/ext/is_std_layout3.C: New test.
+	* g++.dg/ext/is_std_layout4.C: New test.
+
+2019-07-05  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/tree-ssa/ssa-fre-77.c: New testcase.
+
+2019-07-05  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91091
+	* gcc.dg/tree-ssa/pr91091-2.c: New testcase.
+	* gcc.dg/tree-ssa/ssa-fre-70.c: Likewise.
+	* gcc.dg/tree-ssa/ssa-fre-71.c: Likewise.
+	* gcc.dg/tree-ssa/ssa-fre-72.c: Likewise.
+
+2019-07-05  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91091
+	* gcc.dg/tree-ssa/pr91091-1.c: New testcase.
+	* gcc.dg/tree-ssa/ssa-fre-61.c: Adjust.
+
+2019-07-05  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gnat.dg/pack23.adb, gnat.dg/pack23_pkg.ads: New testcase.
+
+2019-07-05  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/task3.adb, gnat.dg/task3.ads, gnat.dg/task3_pkg1.ads,
+	gnat.dg/task3_pkg2.ads: New testcase.
+
+2019-07-05  Javier Miranda  <miranda@adacore.com>
+
+	* gnat.dg/access6.adb: New testcase.
+
+2019-07-05  Bob Duff  <duff@adacore.com>
+
+	* gnat.dg/bip_export.adb, gnat.dg/bip_export.ads: New testcase.
+
+2019-07-05  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/aggr25.adb, gnat.dg/aggr25.ads: New testcase.
+
+2019-07-05  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/predicate7.adb, gnat.dg/predicate7.ads,
+	gnat.dg/predicate7_pkg.ads: New testcase.
+
+2019-07-04  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/78884
+	* gcc.dg/gomp/pr78884.c: New test.
+
+2019-07-04  Andrea Corallo <andrea.corallo@arm.com>
+
+	* jit.dg/test-error-gcc_jit_context_new_binary_op-bad-res-type.c:
+	New testcase.
+
+2019-07-04  Wilco Dijkstra  <wdijkstr@arm.com>
+
+	* gcc.dg/tree-ssa/cunroll-15.c: Remove XFAIL on arm.
+
+2019-07-04  Andrea Corallo <andrea.corallo@arm.com>
+
+	* jit.dg/all-non-failing-tests.h: Add test-accessing-bitfield.c.
+	* jit.dg/test-accessing-bitfield.c: New testcase.
+	* jit.dg/test-error-gcc_jit_context_new_bitfield-invalid-type.c:
+	Likewise.
+	* jit.dg/test-error-gcc_jit_context_new_bitfield-invalid-width.c:
+	Likewise.
+	* jit.dg/test-error-gcc_jit_lvalue_get_address-bitfield.c:
+	Likewise.
+
+2019-07-04  Jan Hubicka  <jh@suse.cz>
+
+	* gcc.dg/tree-ssa/alias-access-path-3.c: New testcase.
+	* gcc.dg/tree-ssa/alias-access-path-8.c: New testcase.
+
+2019-07-04  Andrew Stubbs  <ams@codesourcery.com>
+
+	* g++.dg/gomp/unmappable-1.C: New file.
+
+2019-07-04  Javier Miranda  <miranda@adacore.com>
+
+	* gnat.dg/cpp_constructor.adb, gnat.dg/cpp_constructor_fp.ads,
+	gnat.dg/cpp_constructor_useit.ads: New testcase.
+
+2019-07-04  Gary Dismukes  <dismukes@adacore.com>
+
+	* gnat.dg/ghost5.adb, gnat.dg/ghost5.ads,
+	gnat.dg/ghost5_parent.ads: New testcase.
+
+2019-07-04  Yannick Moy  <moy@adacore.com>
+
+	* gnat.dg/spark3.adb: New testcase.
+
+2019-07-04  Justin Squirek  <squirek@adacore.com>
+
+	* gnat.dg/tagged2.adb, gnat.dg/tagged2.ads: New testcase.
+
+2019-07-04  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/equal6.adb, gnat.dg/equal6_types.adb,
+	gnat.dg/equal6_types.ads: New testcase.
+
+2019-07-04  Justin Squirek  <squirek@adacore.com>
+
+	* gnat.dg/allocator.adb: New testcase.
+
+2019-07-04  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/default_initial_condition.adb,
+	gnat.dg/default_initial_condition_pack.adb,
+	gnat.dg/default_initial_condition_pack.ads: New testcase.
+
+2019-07-04  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/aspect2.adb, gnat.dg/aspect2.ads: New testcase.
+
+2019-07-04  Yannick Moy  <moy@adacore.com>
+
+	* gnat.dg/synchronized2.adb, gnat.dg/synchronized2.ads,
+	gnat.dg/synchronized2_pkg.ads: New testcase.
+
+2019-07-04  Justin Squirek  <squirek@adacore.com>
+
+	* gnat.dg/generic_inst4.adb, gnat.dg/generic_inst4_gen.ads,
+	gnat.dg/generic_inst4_inst.ads, gnat.dg/generic_inst4_typ.ads:
+	New testcase.
+
+2019-07-04  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/dimensions2.adb, gnat.dg/dimensions2_phys.ads,
+	gnat.dg/dimensions2_real_numbers.ads: New testcase.
+
+2019-07-04  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/91063
+	* gcc.dg/gomp/pr91063.c: New test.
+
 2019-07-04  Prathamesh Kulkarni  <prathamesh.kulkarni@linaro.org>
 
 	PR target/88833
@@ -55,7 +198,7 @@
 
 	PR tree-optimization/91033
 	* gcc.target/i386/pr91033.c: New test.
-	
+
 2019-07-03  Bob Duff  <duff@adacore.com>
 
 	* gnat.dg/task2.adb, gnat.dg/task2_pkg.adb,

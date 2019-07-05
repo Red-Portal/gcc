@@ -8779,11 +8779,10 @@ $ gcc -c -gnatVim ...
 @end itemize
 
 The form ALL_CHECKS activates all standard checks (its use is equivalent
-to the use of the @code{gnatva} switch.
+to the use of the @code{gnatVa} switch).
 
-The forms with @code{Off} and @code{On}
-can be used to temporarily disable validity checks
-as shown in the following example:
+The forms with @code{Off} and @code{On} can be used to temporarily disable
+validity checks as shown in the following example:
 
 @example
 pragma Validity_Checks ("c"); -- validity checks for copies
@@ -12839,7 +12838,7 @@ user-defined storage pool.
 [GNAT] This restriction affects the performance of stream operations on types
 @code{String}, @code{Wide_String} and @code{Wide_Wide_String}. By default, the
 compiler uses block reads and writes when manipulating @code{String} objects
-due to their supperior performance. When this restriction is in effect, the
+due to their superior performance. When this restriction is in effect, the
 compiler performs all IO operations on a per-character basis.
 
 @node No_Streams,No_Task_Allocators,No_Stream_Optimizations,Partition-Wide Restrictions
