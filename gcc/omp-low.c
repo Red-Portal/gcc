@@ -140,7 +140,7 @@ struct omp_context
 
   /* True if lower_omp_1 should look up lastprivate conditional in parent
      context.  */
-  bool combined_into_simd_safelen0;
+  bool combined_into_simd_safelen1;
 
   /* True if there is nested scan context with inclusive clause.  */
   bool scan_inclusive;
@@ -5006,6 +5006,17 @@ lower_rec_input_clauses (tree clauses, gimple_seq *ilist, gimple_seq *dlist,
 			    lower_omp (&tseq, ctx->outer);
 			  gimple_seq_add_seq (&llist[1], tseq);
 			}
+		      if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LASTPRIVATE
+			  && ctx->for_simd_scan_phase)
+			{
+			  x = unshare_expr (ivar);
+			  tree orig_v
+			    = build_outer_var_ref (var, ctx,
+						   OMP_CLAUSE_LASTPRIVATE);
+			  x = lang_hooks.decls.omp_clause_assign_op (c, x,
+								     orig_v);
+			  gimplify_and_add (x, &llist[0]);
+			}
 		      if (y)
 			{
 			  y = lang_hooks.decls.omp_clause_dtor (c, ivar);
@@ -5035,6 +5046,16 @@ lower_rec_input_clauses (tree clauses, gimple_seq *ilist, gimple_seq *dlist,
 		}
 	      if (nx)
 		gimplify_and_add (nx, ilist);
+	      if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LASTPRIVATE
+		  && is_simd
+		  && ctx->for_simd_scan_phase)
+		{
+		  tree orig_v = build_outer_var_ref (var, ctx,
+						     OMP_CLAUSE_LASTPRIVATE);
+		  x = lang_hooks.decls.omp_clause_assign_op (c, new_var,
+							     orig_v);
+		  gimplify_and_add (x, ilist);
+		}
 	      /* FALLTHRU */
 
 	    do_dtor:
@@ -5703,17 +5724,18 @@ lower_rec_input_clauses (tree clauses, gimple_seq *ilist, gimple_seq *dlist,
 	  if (gimple_omp_for_combined_into_p (ctx->stmt))
 	    {
 	      /* Signal to lower_omp_1 that it should use parent context.  */
-	      ctx->combined_into_simd_safelen0 = true;
+	      ctx->combined_into_simd_safelen1 = true;
 	      for (c = clauses; c ; c = OMP_CLAUSE_CHAIN (c))
 		if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LASTPRIVATE
 		    && OMP_CLAUSE_LASTPRIVATE_CONDITIONAL (c))
 		  {
 		    tree o = lookup_decl (OMP_CLAUSE_DECL (c), ctx);
-		    tree *v
-		      = ctx->lastprivate_conditional_map->get (o);
-		    tree po = lookup_decl (OMP_CLAUSE_DECL (c), ctx->outer);
-		    tree *pv
-		      = ctx->outer->lastprivate_conditional_map->get (po);
+		    omp_context *outer = ctx->outer;
+		    if (gimple_code (outer->stmt) == GIMPLE_OMP_SCAN)
+		      outer = outer->outer;
+		    tree *v = ctx->lastprivate_conditional_map->get (o);
+		    tree po = lookup_decl (OMP_CLAUSE_DECL (c), outer);
+		    tree *pv = outer->lastprivate_conditional_map->get (po);
 		    *v = *pv;
 		  }
 	    }
@@ -6018,6 +6040,7 @@ lower_lastprivate_clauses (tree clauses, tree predicate, gimple_seq *body_p,
   bool par_clauses = false;
   tree simduid = NULL, lastlane = NULL, simtcond = NULL, simtlast = NULL;
   unsigned HOST_WIDE_INT conditional_off = 0;
+  gimple_seq post_stmt_list = NULL;
 
   /* Early exit if there are no lastprivate or linear clauses.  */
   for (; clauses ; clauses = OMP_CLAUSE_CHAIN (clauses))
@@ -6107,7 +6130,7 @@ lower_lastprivate_clauses (tree clauses, tree predicate, gimple_seq *body_p,
       if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LASTPRIVATE
 	  && OMP_CLAUSE_LASTPRIVATE_CONDITIONAL (c)
 	  && ctx->lastprivate_conditional_map
-	  && !ctx->combined_into_simd_safelen0)
+	  && !ctx->combined_into_simd_safelen1)
 	{
 	  gcc_assert (body_p);
 	  if (simduid)
@@ -6144,6 +6167,12 @@ lower_lastprivate_clauses (tree clauses, tree predicate, gimple_seq *body_p,
 	  gimple_seq_add_stmt (this_stmt_list, gimple_build_label (lab1));
 	  gimplify_assign (mem2, v, this_stmt_list);
 	}
+      else if (predicate
+	       && ctx->combined_into_simd_safelen1
+	       && OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LASTPRIVATE
+	       && OMP_CLAUSE_LASTPRIVATE_CONDITIONAL (c)
+	       && ctx->lastprivate_conditional_map)
+	this_stmt_list = &post_stmt_list;
 
       if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LASTPRIVATE
 	  || (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LINEAR
@@ -6274,6 +6303,7 @@ lower_lastprivate_clauses (tree clauses, tree predicate, gimple_seq *body_p,
 
   if (label)
     gimple_seq_add_stmt (stmt_list, gimple_build_label (label));
+  gimple_seq_add_seq (stmt_list, post_stmt_list);
 }
 
 /* Lower the OpenACC reductions of CLAUSES for compute axis LEVEL
@@ -12412,8 +12442,12 @@ lower_omp_1 (gimple_stmt_iterator *gsi_p, omp_context *ctx)
 	    if (tree *v = up->lastprivate_conditional_map->get (lhs))
 	      {
 		tree clauses;
-		if (up->combined_into_simd_safelen0)
-		  up = up->outer;
+		if (up->combined_into_simd_safelen1)
+		  {
+		    up = up->outer;
+		    if (gimple_code (up->stmt) == GIMPLE_OMP_SCAN)
+		      up = up->outer;
+		  }
 		if (gimple_code (up->stmt) == GIMPLE_OMP_FOR)
 		  clauses = gimple_omp_for_clauses (up->stmt);
 		else

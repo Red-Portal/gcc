@@ -1,3 +1,109 @@
+2019-07-08  Robin Dapp  <rdapp@linux.ibm.com>
+
+	* config/s390/s390.c (s390_shift_truncation_mask): Define.
+	(TARGET_SHIFT_TRUNCATION_MASK): Define.
+
+2019-07-08  Robin Dapp  <rdapp@linux.ibm.com>
+
+	* config/s390/constraints.md: Add new jsc constraint.
+	* config/s390/predicates.md: New predicates.
+	* config/s390/s390-protos.h (s390_valid_shift_count): New function.
+	* config/s390/s390.c (s390_valid_shift_count): New function.
+	(print_shift_count_operand): Use s390_valid_shift_count.
+	(print_operand): Likewise.
+	* config/s390/s390.md: Use new predicate.
+	* config/s390/subst.md: Remove addr_style_op and masked_op substs.
+	* config/s390/vector.md: Use new predicate.
+
+2019-07-08  Joern Rennecke  <joern.rennecke@riscy-ip.com>
+
+	Avoid clash with system header declaration.
+	* testsuite/gcc.dg/vect/slp-reduc-sad.c (uint32_t):
+	Remove unused declaration.
+
+2019-07-08  Andrew Waterman  <andrew@sifive.com>
+	    Jim Wilson  <jimw@sifive.com>
+
+	* config/riscv/riscv.md (lshrsi3_zero_extend_3+1): Use operands[1]
+	bitsize	instead of BITS_PER_WORD.
+	gcc/testsuite/
+
+2019-07-08  Martin Liska  <mliska@suse.cz>
+
+	* collect2.c (defined): Revert to before r254460.
+	(scan_prog_file): Revert to before r254460.
+
+2019-07-08  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/83518
+	* tree-ssa-sccvn.c: Include splay-tree.h.
+	(struct pd_range, struct pd_data): New.
+	(struct vn_walk_cb_data): Add data to track partial definitions.
+	(vn_walk_cb_data::~vn_walk_cb_data): New.
+	(vn_walk_cb_data::push_partial_def): New.
+	(pd_tree_alloc, pd_tree_dealloc, pd_range_compare): New.
+	(vn_reference_lookup_2): When partial defs are registered give up.
+	(vn_reference_lookup_3): Track partial defs for memset and
+	constructor zeroing and for defs from constants.
+
+2019-07-08  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* doc/install.texi (bootstrap-Og): Document.
+
+2019-07-08  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/riscv/pic.md (*local_pic_load_s<mode>)
+	(*local_pic_load_u<mode>): Explicitly specify the mode iterator
+	referenced by <mode>, giving...
+	(*local_pic_load_s<SUBX:mode>, *local_pic_load_u<SUBX:mode>): ...these.
+	* config/riscv/riscv.md (*sge<u>_<X:mode><GPR:mode>)
+	(*slt<u>_<X:mode><GPR:mode>, *sle<u>_<X:mode><GPR:mode>): Explicitly
+	use <X:MODE> for the mode attribute.
+
+2019-07-07  Jeff Law  <law@redhat.com>
+
+	PR tree-optimization/91090
+	* tree-ssa-dom.c (simplify_stmt_for_jump_threading): Fix logic error
+	in handling of ranges to simplify switch statements.
+
+2019-07-07  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* config/darwin.c (darwin_override_options): Make a final check on PIC
+	options.
+
+2019-07-07  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* config/darwin.c (darwin_override_options): Don't jam symbol stubs
+	on for kernel code.
+
+2019-07-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/91068
+	* config/mips/mips.md (*mul_acc_si, *mul_acc_si_r3900, *macc)
+	(*msac, *msac_using_macc, *mul_sub_si): Use "l" for input operands
+	instead of matching them to "l" output operands.
+
+2019-07-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/mips/mips.c (mips_split_move): Zero-initialize addr
+	and check whether addr.reg is nonnull before using it.
+
+2019-07-06  Jakub Jelinek  <jakub@redhat.com>
+
+	* omp-low.c (lower_rec_input_clauses): For lastprivate clauses in
+	ctx->for_simd_scan_phase simd copy the outer var to the privatized
+	variable(s).  For conditional lastprivate look through outer
+	GIMPLE_OMP_SCAN context.
+	(lower_omp_1): For conditional lastprivate look through outer
+	GIMPLE_OMP_SCAN context.
+
+	* omp-low.c (struct omp_context): Rename combined_into_simd_safelen0
+	member to combined_into_simd_safelen1.
+	(lower_rec_input_clauses, lower_omp_1): Adjust uses.
+	(lower_lastprivate_clauses): Likewise.  For conditional lastprivate
+	clauses if ctx->combined_into_simd_safelen1 put statements after the
+	predicate conditionalized block rather than into it.
+
 2019-07-06  Richard Sandiford  <richard.sandiford@arm.com>
 
 	* config/s390/s390.md (*negabs<FP:mode>2_nocc): Use FP for

@@ -1,3 +1,82 @@
+2019-07-08  Robin Dapp  <rdapp@linux.ibm.com>
+
+	* gcc.target/s390/rotate-truncation-mask.c: New test.
+
+2019-07-08  Robin Dapp  <rdapp@linux.ibm.com>
+
+	* gcc.target/s390/combine-rotate-modulo.c: New test.
+	* gcc.target/s390/combine-shift-rotate-add-mod.c: New test.
+	* gcc.target/s390/vector/combine-shift-vec.c: New test.
+
+2019-07-08  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91108
+	* gcc.dg/tree-ssa/ssa-fre-61.c: Adjust back.
+	* gcc.dg/tree-ssa/ssa-fre-78.c: New testcase.
+
+2019-07-08  Jim Wilson  <jimw@sifive.com>
+
+	* gcc.target/riscv/shift-shift-2.c: Add one more test.
+
+2019-07-08  Paolo Carlini  <paolo.carlini@oracle.com>
+
+	PR c++/65143
+	* g++.dg/tree-ssa/final2.C: New.
+	* g++.dg/tree-ssa/final3.C: Likewise.
+
+2019-07-08  Javier Miranda  <miranda@adacore.com>
+
+	* gnat.dg/interface10.adb: New testcase.
+
+2019-07-08  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/addr13.adb, gnat.dg/addr13.ads: New testcase.
+
+2019-07-08  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/entry1.adb, gnat.dg/entry1.ads: New testcase.
+
+2019-07-08  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/fixed_delete.adb: New testcase.
+
+2019-07-08  Javier Miranda  <miranda@adacore.com>
+
+	* gnat.dg/interface9.adb, gnat.dg/interface9_root-child.ads,
+	gnat.dg/interface9_root.ads: New testcase.
+
+2019-07-08  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/predicate9.adb: New testcase.
+
+2019-07-08  Justin Squirek  <squirek@adacore.com>
+
+	* gnat.dg/sso16.adb: New testcase.
+
+2019-07-08  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/predicate8.adb, gnat.dg/predicate8_pkg.adb,
+	gnat.dg/predicate8_pkg.ads: New testcase.
+
+2019-07-08  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/83518
+	* gcc.dg/tree-ssa/ssa-fre-73.c: New testcase.
+	* gcc.dg/tree-ssa/ssa-fre-74.c: Likewise.
+	* gcc.dg/tree-ssa/ssa-fre-75.c: Likewise.
+	* gcc.dg/tree-ssa/ssa-fre-76.c: Likewise.
+	* g++.dg/tree-ssa/pr83518.C: Likewise.
+
+2019-07-08  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.dg/guality/guality.h: Include <sys/prctl.h> on Linux targets.
+	(main): Use PR_SET_PTRACER where available.
+
+2019-07-07  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/91077
+	* gfortran.dg/pointer_array_11.f90 : New test.
+
 2019-07-06  Jakub Jelinek  <jakub@redhat.com>
 
 	* c-c++-common/gomp/scan-4.c: Don't expect sorry message.

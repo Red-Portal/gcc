@@ -115,13 +115,15 @@ package body Bindo.Diagnostics is
      (G                    : Library_Graph;
       Source               : Library_Graph_Vertex_Id;
       Actual_Destination   : Library_Graph_Vertex_Id;
-      Expected_Destination : Library_Graph_Vertex_Id);
+      Expected_Destination : Library_Graph_Vertex_Id;
+      Elaborate_All_Active : Boolean);
    pragma Inline (Output_Elaborate_Body_Transition);
    --  Output a transition through an edge of library graph G with successor
-   --  Source and predecessor Actual_Destination. Vertex Source is either a
-   --  spec subject to pragma Elaborate_Body or denotes the body of such a
-   --  spec. Expected_Destination denotes the predecessor as specified by the
-   --  next edge in a cycle.
+   --  Source and predecessor Actual_Destination. Vertex Source is either
+   --  a spec subject to pragma Elaborate_Body or denotes the body of such
+   --  a spec. Expected_Destination denotes the predecessor as specified by
+   --  the next edge in a cycle. Elaborate_All_Active should be set when the
+   --  transition occurs within a cycle that involves an Elaborate_All edge.
 
    procedure Output_Elaborate_Suggestions
      (G    : Library_Graph;
@@ -160,7 +162,8 @@ package body Bindo.Diagnostics is
    --  Output a transition through a Forced edge of library graph G with
    --  successor Source and predecessor Actual_Destination. Parameter
    --  Expected_Destination denotes the predecessor as specified by the
-   --  next edge in a cycle.
+   --  next edge in a cycle. Elaborate_All_Active should be set when the
+   --  transition occurs within a cycle that involves an Elaborate_All edge.
 
    procedure Output_Full_Encoding_Suggestions
      (G          : Library_Graph;
@@ -285,9 +288,9 @@ package body Bindo.Diagnostics is
       end loop;
    end Diagnose_All_Cycles;
 
-   --------------------------
+   ----------------------------
    -- Diagnose_Circularities --
-   --------------------------
+   ----------------------------
 
    procedure Diagnose_Circularities
      (Inv_Graph : Invocation_Graph;
@@ -328,18 +331,21 @@ package body Bindo.Diagnostics is
       Lib_Graph : Library_Graph;
       Cycle     : Library_Graph_Cycle_Id)
    is
-      Current_Edge         : Library_Graph_Edge_Id;
-      Elaborate_All_Active : Boolean;
-      First_Edge           : Library_Graph_Edge_Id;
-      Iter                 : Edges_Of_Cycle_Iterator;
-      Next_Edge            : Library_Graph_Edge_Id;
-
-   begin
       pragma Assert (Present (Inv_Graph));
       pragma Assert (Present (Lib_Graph));
       pragma Assert (Present (Cycle));
 
-      Elaborate_All_Active := False;
+      Elaborate_All_Active : constant Boolean :=
+                               Contains_Elaborate_All_Edge
+                                 (G     => Lib_Graph,
+                                  Cycle => Cycle);
+
+      Current_Edge : Library_Graph_Edge_Id;
+      First_Edge   : Library_Graph_Edge_Id;
+      Iter         : Edges_Of_Cycle_Iterator;
+      Next_Edge    : Library_Graph_Edge_Id;
+
+   begin
       First_Edge := No_Library_Graph_Edge;
 
       --  Inspect the edges of the cycle in pairs, emitting diagnostics based
@@ -355,11 +361,6 @@ package body Bindo.Diagnostics is
             Next (Iter, Current_Edge);
 
             First_Edge := Current_Edge;
-            Elaborate_All_Active :=
-              Is_Elaborate_All_Edge
-                (G    => Lib_Graph,
-                 Edge => First_Edge);
-
             Output_Reason_And_Circularity_Header
               (G          => Lib_Graph,
                First_Edge => First_Edge);
@@ -533,12 +534,12 @@ package body Bindo.Diagnostics is
       pragma Assert (Present (G));
       pragma Assert (Present (Cycle));
 
-      --  The cycle contains at least one invocation edge and the main library
-      --  unit was compiled with the static model. Using the dynamic model may
-      --  eliminate the invocation edge, and thus the cycle.
+      --  The cycle contains at least one invocation edge where the successor
+      --  was statically elaborated. Using the dynamic model may eliminate an
+      --  invocation edge, and thus the cycle.
 
       if Invocation_Edge_Count (G, Cycle) > 0
-        and then not Is_Dynamically_Elaborated (G)
+        and then Contains_Weak_Static_Successor (G, Cycle)
       then
          Error_Msg_Info
            ("    use the dynamic elaboration model (compiler switch -gnatE)");
@@ -584,7 +585,7 @@ package body Bindo.Diagnostics is
       pragma Assert (Present (Expected_Destination));
 
       --  The actual and expected destination vertices match, and denote the
-      --  spec of a unit.
+      --  initial declaration of a unit.
       --
       --            Elaborate_All   Actual_Destination
       --    Source ---------------> spec -->
@@ -662,7 +663,8 @@ package body Bindo.Diagnostics is
      (G                    : Library_Graph;
       Source               : Library_Graph_Vertex_Id;
       Actual_Destination   : Library_Graph_Vertex_Id;
-      Expected_Destination : Library_Graph_Vertex_Id)
+      Expected_Destination : Library_Graph_Vertex_Id;
+      Elaborate_All_Active : Boolean)
    is
    begin
       pragma Assert (Present (G));
@@ -670,20 +672,17 @@ package body Bindo.Diagnostics is
       pragma Assert (Present (Actual_Destination));
       pragma Assert (Present (Expected_Destination));
 
-      --  The actual and expected destination vertices match, and denote the
-      --  spec or body of a unit subject to pragma Elaborate_Body. There is no
-      --  need to mention the pragma because it does not affect the path of the
-      --  cycle. Treat the edge as a regular with edge.
+      --  The actual and expected destination vertices match
       --
-      --               Actual_Destination
-      --    Source --> spec Elaborate_Body -->
-      --               Expected_Destination
+      --                     Actual_Destination
+      --    Source --------> spec -->
+      --    Elaborate_Body   Expected_Destination
       --
-      --               spec Elaborate_Body
+      --                     spec
       --
-      --               Actual_Destination
-      --    Source --> body -->
-      --               Expected_Destination
+      --                     Actual_Destination
+      --    Source --------> body -->
+      --    Elaborate_Body   Expected_Destination
 
       if Actual_Destination = Expected_Destination then
          Error_Msg_Unit_1 := Name (G, Source);
@@ -691,22 +690,47 @@ package body Bindo.Diagnostics is
          Error_Msg_Info
            ("    unit $ has with clause for unit $");
 
-      --  Otherwise the actual destination vertex is the spec of a unit subject
-      --  to pragma Elaborate_Body and the expected destination vertex is the
-      --  completion body. The pragma must be mentioned because it directs the
-      --  path of the cycle from the spec to the body.
+      --  The actual destination vertex denotes the spec of a unit while the
+      --  expected destination is the corresponding body, and the unit is in
+      --  the closure of an earlier Elaborate_All pragma.
       --
-      --               Actual_Destination
-      --    Source --> spec Elaborate_Body
-      --
-      --               body -->
-      --               Expected_Destination
+      --                     Actual_Destination
+      --    Source --------> spec
+      --    Elaborate_Body
+      --                     body -->
+      --                     Expected_Destination
 
-      else
+      elsif Elaborate_All_Active then
          pragma Assert (Is_Spec_With_Body (G, Actual_Destination));
          pragma Assert (Is_Body_With_Spec (G, Expected_Destination));
          pragma Assert
            (Proper_Body (G, Actual_Destination) = Expected_Destination);
+
+         Error_Msg_Unit_1 := Name (G, Source);
+         Error_Msg_Unit_2 := Name (G, Actual_Destination);
+         Error_Msg_Info
+           ("    unit $ has with clause for unit $");
+
+         Error_Msg_Unit_1 := Name (G, Expected_Destination);
+         Error_Msg_Info
+           ("    unit $ is in the closure of pragma Elaborate_All");
+
+      --  Otherwise the actual destination vertex is the spec of a unit subject
+      --  to pragma Elaborate_Body and the expected destination vertex is the
+      --  completion body.
+      --
+      --                     Actual_Destination
+      --    Source --------> spec Elaborate_Body
+      --    Elaborate_Body
+      --                     body -->
+      --                     Expected_Destination
+
+      else
+         pragma Assert
+           (Is_Elaborate_Body_Pair
+             (G           => G,
+              Spec_Vertex => Actual_Destination,
+              Body_Vertex => Expected_Destination));
 
          Error_Msg_Unit_1 := Name (G, Source);
          Error_Msg_Unit_2 := Name (G, Actual_Destination);
@@ -762,7 +786,7 @@ package body Bindo.Diagnostics is
       pragma Assert (Present (Expected_Destination));
 
       --  The actual and expected destination vertices match, and denote the
-      --  spec of a unit.
+      --  initial declaration of a unit.
       --
       --            Elaborate   Actual_Destination
       --    Source -----------> spec -->
@@ -869,8 +893,7 @@ package body Bindo.Diagnostics is
       pragma Assert (Present (Actual_Destination));
       pragma Assert (Present (Expected_Destination));
 
-      --  The actual and expected destination vertices match, and denote the
-      --  spec of a unit.
+      --  The actual and expected destination vertices match
       --
       --            Forced   Actual_Destination
       --    Source --------> spec -->
@@ -922,13 +945,11 @@ package body Bindo.Diagnostics is
       --                     Expected_Destination
 
       else
-         pragma Assert (Is_Spec_With_Body (G, Actual_Destination));
-         pragma Assert (Is_Spec_With_Elaborate_Body (G, Actual_Destination));
-         pragma Assert (Is_Body_With_Spec (G, Expected_Destination));
          pragma Assert
-           (Is_Body_Of_Spec_With_Elaborate_Body (G, Expected_Destination));
-         pragma Assert
-           (Proper_Body (G, Actual_Destination) = Expected_Destination);
+           (Is_Elaborate_Body_Pair
+             (G           => G,
+              Spec_Vertex => Actual_Destination,
+              Body_Vertex => Expected_Destination));
 
          Error_Msg_Unit_1 := Name (G, Source);
          Error_Msg_Unit_2 := Name (G, Actual_Destination);
@@ -1286,7 +1307,8 @@ package body Bindo.Diagnostics is
            (G                    => Lib_Graph,
             Source               => Source,
             Actual_Destination   => Actual_Destination,
-            Expected_Destination => Expected_Destination);
+            Expected_Destination => Expected_Destination,
+            Elaborate_All_Active => Elaborate_All_Active);
 
       elsif Is_Elaborate_Edge (Lib_Graph, Current_Edge) then
          Output_Elaborate_Transition
@@ -1340,7 +1362,7 @@ package body Bindo.Diagnostics is
       pragma Assert (Present (Expected_Destination));
 
       --  The actual and expected destination vertices match, and denote the
-      --  spec of a unit.
+      --  initial declaration of a unit.
       --
       --            with   Actual_Destination
       --    Source ------> spec -->
@@ -1392,13 +1414,11 @@ package body Bindo.Diagnostics is
       --                   Expected_Destination
 
       else
-         pragma Assert (Is_Spec_With_Body (G, Actual_Destination));
-         pragma Assert (Is_Spec_With_Elaborate_Body (G, Actual_Destination));
-         pragma Assert (Is_Body_With_Spec (G, Expected_Destination));
          pragma Assert
-           (Is_Body_Of_Spec_With_Elaborate_Body (G, Expected_Destination));
-         pragma Assert
-           (Proper_Body (G, Actual_Destination) = Expected_Destination);
+           (Is_Elaborate_Body_Pair
+             (G           => G,
+              Spec_Vertex => Actual_Destination,
+              Body_Vertex => Expected_Destination));
 
          Error_Msg_Unit_1 := Name (G, Source);
          Error_Msg_Unit_2 := Name (G, Actual_Destination);
