@@ -4492,7 +4492,7 @@ package body Exp_Util is
    begin
       --  E is the package or generic package which is externally axiomatized
 
-      if Ekind_In (E, E_Generic_Package, E_Package)
+      if Is_Package_Or_Generic_Package (E)
         and then Has_Annotate_Pragma_For_External_Axiomatization (E)
       then
          return E;
@@ -5067,9 +5067,13 @@ package body Exp_Util is
       --  may be constants that depend on the bounds of a string literal, both
       --  standard string types and more generally arrays of characters.
 
-      --  In GNATprove mode, these extra subtypes are not needed
+      --  In GNATprove mode, these extra subtypes are not needed, unless Exp is
+      --  a static expression. In that case, the subtype will be constrained
+      --  while the original type might be unconstrained, so expanding the type
+      --  is necessary both for passing legality checks in GNAT and for precise
+      --  analysis in GNATprove.
 
-      if GNATprove_Mode then
+      if GNATprove_Mode and then not Is_Static_Expression (Exp) then
          return;
       end if;
 
@@ -5094,7 +5098,7 @@ package body Exp_Util is
 
             --  This subtype indication may be used later for constraint checks
             --  we better make sure that if a variable was used as a bound of
-            --  of the original slice, its value is frozen.
+            --  the original slice, its value is frozen.
 
             Evaluate_Slice_Bounds (Exp);
          end;
@@ -11686,6 +11690,10 @@ package body Exp_Util is
       --  why would the flag be set in the first place).
 
       Set_Assignment_OK (Res, Assignment_OK (Exp));
+
+      --  Preserve the Do_Range_Check flag in all copies
+
+      Set_Do_Range_Check (Res, Do_Range_Check (Exp));
 
       --  Finally rewrite the original expression and we are done
 

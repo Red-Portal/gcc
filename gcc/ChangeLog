@@ -1,3 +1,138 @@
+2019-07-09  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91114
+	* tree-vect-data-refs.c (vect_analyze_data_refs): Failure to
+	find a vector type isn't fatal.
+
+2019-07-09  Sylvia Taylor  <sylvia.taylor@arm.com>
+
+	* config/aarch64/aarch64-simd.md
+	(aarch64_crypto_aes<aes_op>v16qi): Redefine pattern with xor.
+	(aarch64_crypto_aes<aesmc_op>v16qi): Remove attribute enabled.
+	(*aarch64_crypto_aes<aes_op>v16qi_xor_combine): Remove both.
+	(*aarch64_crypto_aese_fused,
+	*aarch64_crypto_aesd_fused): Update to new definition.
+	* config/aarch64/aarch64.c
+	(aarch_macro_fusion_pair_p): Remove aese/aesmc fusion check.
+
+2019-07-09  Richard Biener  <rguenther@suse.de>
+
+	* gimple-match.h (gimple_match_op::resimplify): New.
+	(gimple_resimplify1, gimple_resimplify2, gimple_resimplify3,
+	gimple_resimplify4, gimple_resimplify5): Remove.
+	* gimple-match-head.c (gimple_resimplify1, gimple_resimplify2,
+	gimple_resimplify3, gimple_resimplify4, gimple_resimplify5):
+	Make static.
+	(gimple_match_op::resimplify): New.
+	* tree-ssa-sccvn.c (vn_nary_build_or_lookup_1): Valueize
+	according to availability.  Use gimple_match_op::resimplify. 
+
+2019-07-09  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* ira-emit.c (emit_moves): Skip DEBUG_INSNs when setting the location.
+
+2019-07-09  Sylvia Taylor  <sylvia.taylor@arm.com>
+
+	* config/arm/crypto.md:
+	(crypto_<crypto_pattern>): Redefine aese/aesd pattern with xor.
+	(crypto_<crypto_pattern>): Remove attribute enabled for aesmc.
+	(crypto_<crypto_pattern>): Split CRYPTO_BINARY into 2 patterns.
+	(*aarch32_crypto_aese_fused, *aarch32_crypto_aesd_fused): New.
+	* config/arm/arm.c
+	(aarch_macro_fusion_pair_p): Remove aes/aesmc fusion check.
+	* config/arm/aarch-common-protos.h
+	(aarch_crypto_can_dual_issue): Remove.
+	* config/arm/aarch-common.c
+	(aarch_crypto_can_dual_issue): Likewise.
+	* config/arm/exynos-m1.md: Remove aese/aesmc fusion.
+	* config/arm/cortex-a53.md: Likewise.
+	* config/arm/cortex-a57.md: Likewise.
+	* config/arm/iterators.md:
+	(CRYPTO_BINARY): Redefine.
+	(CRYPTO_UNARY): Removed.
+	(CRYPTO_AES, CRYPTO_AESMC): New.
+
+2019-07-09  Richard Biener  <rguenther@suse.de>
+
+	* tree-ssa-sccvn.c (struct vn_walk_cb_data): Add orig_ref member.
+	(vn_reference_lookup_3): If the main ref has no access path recorded
+	but orig_ref has use it to do access-path based disambiguation.
+	(vn_reference_lookup_pieces): Adjust.
+	(vn_reference_lookup): Pass down original ref if we valueized.
+
+2019-07-09  Martin Liska  <mliska@suse.cz>
+
+	* doc/extend.texi: Document influence on loop
+	optimizers.
+
+2019-07-09  Martin Liska  <mliska@suse.cz>
+
+	* lto-compress.c (lto_normalized_zstd_level): Do not use
+	ZSTD_CLEVEL_DEFAULT as it is not default in old releases
+	of libzstd.  One can use 0 as a default compression level.
+
+2019-07-09  Martin Liska  <mliska@suse.cz>
+
+	* doc/invoke.texi: Add link from -fprofile-dir option.
+	Use better wording for 'gcno filename'.
+
+2019-07-08  Martin Sebor  <msebor@redhat.com>
+
+	PR middle-end/71924
+	PR middle-end/90549
+	* gimple-ssa-isolate-paths.c (isolate_path): Add attribute.  Update
+	comment.
+	(args_loc_t): New type.
+	(args_loc_t, locmap_t): same.
+	(diag_returned_locals): New function.
+	(is_addr_local): Same.
+	(handle_return_addr_local_phi_arg, warn_return_addr_local): Same.
+	(find_implicit_erroneous_behavior): Call warn_return_addr_local_phi_arg.
+	(find_explicit_erroneous_behavior): Call warn_return_addr_local.
+
+2019-07-08  Jakub Jelinek  <jakub@redhat.com>
+
+	* tree-vect-stmts.c (scan_operand_equal_p): Look through MEM_REF
+	with SSA_NAME address of POINTER_PLUS_EXPR.  Handle MULT_EXPR
+	and casts in offset when different, both through gimple stmts
+	and through trees.  Rewritten using loops to minimize code duplication
+	for each operand.
+
+2019-07-08  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* emit-rtl.c (set_insn_locations): New function moved from...
+	* function.c (set_insn_locations): ...here.
+	* ira-emit.c (emit_moves): Propagate location of the first instruction
+	to the inserted move instructions.
+	* reg-stack.c (compensate_edge): Set the location if the sequence is
+	inserted on the edge.
+	* rtl.h (set_insn_locations): Declare.
+
+2019-07-08  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	* config/rs6000/rs6000.c (rs6000_machine_from_flags): Ignore
+	OPTION_MASK_PPC_GFXOPT and OPTION_MASK_PPC_GPOPT for selecting the
+	.machine string.
+
+2019-07-08  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR rtl-optimization/88233
+	* common.opt (fsplit-wide-types-early): New option.
+	* common/config/rs6000/rs6000-common.c
+	(rs6000_option_optimization_table): Add OPT_fsplit_wide_types_early for
+	OPT_LEVELS_ALL.
+	* doc/invoke.texi (Optimization Options): Add -fsplit-wide-types-early.
+	* lower-subreg.c (pass_lower_subreg2::gate): Add test for
+	flag_split_wide_types_early.
+	(pass_data_lower_subreg3): New.
+	(pass_lower_subreg3): New.
+	(make_pass_lower_subreg3): New.
+	* passes.def (pass_lower_subreg2): Move after the loop passes.
+	(pass_lower_subreg3): New, inserted where pass_lower_subreg2 was.
+	* tree-pass.h (make_pass_lower_subreg2): Move up, to its new place in
+	the pass pipeline; its previous place is taken by ...
+	(make_pass_lower_subreg3): ... this.
+
 2019-07-08  Robin Dapp  <rdapp@linux.ibm.com>
 
 	* config/s390/s390.c (s390_shift_truncation_mask): Define.

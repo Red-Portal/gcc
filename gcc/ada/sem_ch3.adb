@@ -3649,8 +3649,10 @@ package body Sem_Ch3 is
    --  Ghost mode.
 
    procedure Analyze_Object_Declaration (N : Node_Id) is
-      Loc   : constant Source_Ptr := Sloc (N);
-      Id    : constant Entity_Id  := Defining_Identifier (N);
+      Loc       : constant Source_Ptr := Sloc (N);
+      Id        : constant Entity_Id  := Defining_Identifier (N);
+      Next_Decl : constant Node_Id := Next (N);
+
       Act_T : Entity_Id;
       T     : Entity_Id;
 
@@ -3912,6 +3914,11 @@ package body Sem_Ch3 is
             A_Id := Get_Aspect_Id (Chars (Identifier (A)));
             while Present (A) loop
                if A_Id = Aspect_Alignment or else A_Id = Aspect_Address then
+
+                  --  Set flag on object entity, for later processing at
+                  --  the freeze point.
+
+                  Set_Has_Delayed_Aspects (Id);
                   return True;
                end if;
 
@@ -4495,8 +4502,21 @@ package body Sem_Ch3 is
             null;
 
          else
-            Insert_After (N,
-              Make_Predicate_Check (T, New_Occurrence_Of (Id, Loc)));
+            --  The check must be inserted after the expanded aggregate
+            --  expansion code, if any.
+
+            declare
+               Check : constant Node_Id :=
+                 Make_Predicate_Check (T, New_Occurrence_Of (Id, Loc));
+
+            begin
+               if No (Next_Decl) then
+                  Append_To (List_Containing (N), Check);
+
+               else
+                  Insert_Before (Next_Decl, Check);
+               end if;
+            end;
          end if;
       end if;
 
@@ -4590,14 +4610,6 @@ package body Sem_Ch3 is
             --  its expansion because there are cases in they are not required.
 
             elsif Is_Interface (T) then
-               null;
-
-            --  In GNATprove mode, Expand_Subtype_From_Expr does nothing. Thus,
-            --  we should prevent the generation of another Itype with the
-            --  same name as the one already generated, or we end up with
-            --  two identical types in GNATprove.
-
-            elsif GNATprove_Mode then
                null;
 
             --  If the type is an unchecked union, no subtype can be built from
