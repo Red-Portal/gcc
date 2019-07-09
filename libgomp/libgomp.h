@@ -461,8 +461,9 @@ struct gomp_task
      into the various queues to be scheduled.  */
   size_t num_dependees;
 
-  /* Number of childrens created from this task. */
+  /* Number of childrens created and queued from this task. */
   size_t num_children;
+  size_t queued_children;
 
   /* Priority of this task.  */
   int priority;
@@ -501,6 +502,7 @@ struct gomp_taskgroup
   bool workshare;
   gomp_sem_t taskgroup_sem;
   size_t num_children;
+  size_t queued_children;
 };
 
 /* Various state of OpenMP async offloading tasks.  */
