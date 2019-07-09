@@ -834,8 +834,12 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
       return false;
     }
   if (taskgroup)
+    {
       ++taskgroup->num_children;
+      ++taskgroup->queued_children;
+    }
   ++parent->num_children;
+  ++parent->queued_children;
 
   /* For async offloading, if we don't need to wait for dependencies,
      run the gomp_target_task_fn right away, essentially schedule the
@@ -1284,9 +1288,7 @@ gomp_task_run_post_remove_parent (struct gomp_task *child_task)
       gomp_sem_post (&parent->taskwait->taskwait_sem);
     }
 
-  if (/* priority_queue_remove (PQ_CHILDREN, &parent->children_queue, */
-      /* 			     child_task, MEMMODEL_RELEASE) */
-      __atomic_sub_fetch(&parent->num_children, 1, MEMMODEL_RELEASE) == 0
+  if (__atomic_sub_fetch(&parent->num_children, 1, MEMMODEL_RELEASE) == 0
       && parent->taskwait && parent->taskwait->in_taskwait)
     {
       parent->taskwait->in_taskwait = false;
@@ -1482,8 +1484,9 @@ GOMP_taskwait (void)
   while (1)
     {
       bool cancelled = false;
-      if (__atomic_load_n (&task->queued_children, MEMMODEL_ACQUIRE) == 0)
+      if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
 	{
+	    printf ("Taskwait: don't Have queued children...\n");
 	  if (task->num_children == 0)
 	    {
 	      bool destroy_taskwait = task->taskwait != NULL;
@@ -1502,8 +1505,13 @@ GOMP_taskwait (void)
 	    goto do_wait;
 	}
       else
-	next_task = priority_queue_next_task (PQ_TEAM, &team->task_queue,
-					      PQ_IGNORED, NULL, &ignored);
+	  printf("Taskwait: Have %d children and %d queued children %d queued...\n",
+		 (int)__atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE),
+		 (int)__atomic_load_n (&task->queued_children, MEMMODEL_ACQUIRE),
+		 (int)__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) );
+
+      next_task = priority_queue_next_task (PQ_TEAM, &team->task_queue,
+					    PQ_IGNORED, NULL, &ignored);
 
       if (next_task->kind == GOMP_TASK_WAITING)
 	{
@@ -1577,7 +1585,7 @@ GOMP_taskwait (void)
 	  thr->task = task;
 	}
       else
-	gomp_sem_wait (&taskwait.taskwait_sem);
+      	gomp_sem_wait (&taskwait.taskwait_sem);
       gomp_mutex_lock (&team->task_lock);
       if (child_task)
 	{
@@ -1586,14 +1594,19 @@ GOMP_taskwait (void)
 	    = gomp_task_run_post_handle_depend (child_task, team);
 
 	  /* is this enough? */
-	  __atomic_sub_fetch(&task->num_children, 1, MEMMODEL_RELEASE);
-	  child_task->pnode[PQ_CHILDREN].next = NULL;
-	  child_task->pnode[PQ_CHILDREN].prev = NULL;
+	  /* __atomic_sub_fetch(&task->parent->num_children, 1, MEMMODEL_RELEASE); */
+	  /* child_task->pnode[PQ_CHILDREN].next = NULL; */
+	  /* child_task->pnode[PQ_CHILDREN].prev = NULL; */
 
+	  /* __atomic_sub_fetch (&child_task->parent->num_children, 1, */
+	  /* 		      MEMMODEL_RELEASE); */
+	  /* child_task->pnode[PQ_CHILDREN].next = NULL; */
+	  /* child_task->pnode[PQ_CHILDREN].prev = NULL; */
 
 	  /*  not this? */
-	  // gomp_task_run_post_remove_parent (child_task);
+	  gomp_task_run_post_remove_parent (child_task);
 	  gomp_task_run_post_remove_taskgroup (child_task);
+
 
 	  to_free = child_task;
 	  child_task = NULL;
@@ -1940,7 +1953,8 @@ GOMP_taskgroup_end (void)
     {
       bool cancelled = false;
 
-      if (__atomic_load_n (&taskgroup->queued_children, MEMMODEL_ACQUIRE) == 0)
+      if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
+	  //__atomic_load_n (&taskgroup->queued_children, MEMMODEL_ACQUIRE) == 0)
 	{
 	  printf ("don't Have queued children...\n");
 	  if (__atomic_load_n (&taskgroup->num_children, MEMMODEL_ACQUIRE) == 0)
