@@ -432,12 +432,6 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	 child thread, but seeing a stale non-NULL value is not a
 	 problem.  Once past the task_lock acquisition, this thread
 	 will see the real value of task.children.  */
-      /* if (!priority_queue_empty_p (&task.children_queue, MEMMODEL_RELAXED)) */
-      /* 	{ */
-      /* 	  gomp_mutex_lock (&team->task_lock); */
-      /* 	  gomp_clear_parent (&task.children_queue); */
-      /* 	  gomp_mutex_unlock (&team->task_lock); */
-      /* 	} */
       gomp_end_task ();
     }
   else
@@ -522,24 +516,11 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    }
 	}
 
-      /* priority_queue_insert (PQ_CHILDREN, &parent->children_queue, */
-      /* 			     task, priority, */
-      /* 			     PRIORITY_INSERT_BEGIN, */
-      /* 			     /\*adjust_parent_depends_on=*\/false, */
-      /* 			     task->parent_depends_on); */
-      /* if (taskgroup) */
-      /* 	priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
-      /* 			       task, priority, */
-      /* 			       PRIORITY_INSERT_BEGIN, */
-      /* 			       /\*adjust_parent_depends_on=*\/false, */
-      /* 			       task->parent_depends_on); */
-
       priority_queue_insert (PQ_TEAM, &team->task_queue,
 			     task, priority,
 			     PRIORITY_INSERT_END,
 			     /*adjust_parent_depends_on=*/false,
 			     task->parent_depends_on);
-
 
       ++team->task_count;
       ++team->task_queued_count;
@@ -612,15 +593,7 @@ static void
 gomp_target_task_completion (struct gomp_team *team, struct gomp_task *task)
 {
   struct gomp_task *parent = task->parent;
-  /* if (parent) */
-  /*   priority_queue_move_task_first (PQ_CHILDREN, &parent->children_queue, */
-  /* 				    task); */
-
   struct gomp_taskgroup *taskgroup = task->taskgroup;
-  /* if (taskgroup) */
-  /*   priority_queue_move_task_first (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
-  /* 				    task); */
-
   priority_queue_insert (PQ_TEAM, &team->task_queue, task, task->priority,
 			 PRIORITY_INSERT_BEGIN, false,
 			 task->parent_depends_on);
@@ -847,17 +820,6 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
   if (devicep != NULL
       && (devicep->capabilities & GOMP_OFFLOAD_CAP_OPENMP_400))
     {
-      /* priority_queue_insert (PQ_CHILDREN, &parent->children_queue, task, 0, */
-      /* 			     PRIORITY_INSERT_END, */
-      /* 			     /\*adjust_parent_depends_on=*\/false, */
-      /* 			     task->parent_depends_on); */
-      /* if (taskgroup) */
-      /* 	priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
-      /* 			       task, 0, PRIORITY_INSERT_END, */
-      /* 			       /\*adjust_parent_depends_on=*\/false, */
-      /* 			       task->parent_depends_on); */
-
-
       task->pnode[PQ_TEAM].next = NULL;
       task->pnode[PQ_TEAM].prev = NULL;
       task->kind = GOMP_TASK_TIED;
@@ -880,16 +842,7 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
       gomp_mutex_unlock (&team->task_lock);
       return true;
     }
-  /* priority_queue_insert (PQ_CHILDREN, &parent->children_queue, task, 0, */
-  /* 			 PRIORITY_INSERT_BEGIN, */
-  /* 			 /\*adjust_parent_depends_on=*\/false, */
-  /* 			 task->parent_depends_on); */
 
-  /* if (taskgroup) */
-  /*   priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue, task, 0, */
-  /* 			   PRIORITY_INSERT_BEGIN, */
-  /* 			   /\*adjust_parent_depends_on=*\/false, */
-  /* 			   task->parent_depends_on); */
   priority_queue_insert (PQ_TEAM, &team->task_queue, task, 0,
 			 PRIORITY_INSERT_END,
 			 /*adjust_parent_depends_on=*/false,
@@ -1086,26 +1039,10 @@ gomp_task_run_pre (struct gomp_task *child_task, struct gomp_task *parent,
 		   struct gomp_team *team)
 {
 #if _LIBGOMP_CHECKING_
-  /* if (child_task->parent) */
-  /*   priority_queue_verify (PQ_CHILDREN, */
-  /* 			   &child_task->parent->children_queue, true); */
-  /* if (child_task->taskgroup) */
-  /*   priority_queue_verify (PQ_TASKGROUP, */
-  /* 			   &child_task->taskgroup->taskgroup_queue, false); */
   priority_queue_verify (PQ_TEAM, &team->task_queue, false);
 #endif
 
-  /* Task is about to go tied, move it out of the way.  */
-  /* if (parent) */
-  /*   priority_queue_downgrade_task (PQ_CHILDREN, &parent->children_queue, */
-  /* 				   child_task); */
-
-  /* Task is about to go tied, move it out of the way.  */
   struct gomp_taskgroup *taskgroup = child_task->taskgroup;
-  /* if (taskgroup) */
-  /*   priority_queue_downgrade_task (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
-  /* 				   child_task); */
-
   priority_queue_remove (PQ_TEAM, &team->task_queue, child_task,
 			 MEMMODEL_RELAXED);
   child_task->pnode[PQ_TEAM].next = NULL;
@@ -1192,11 +1129,6 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
       struct gomp_taskgroup *taskgroup = task->taskgroup;
       if (parent)
 	{
-	  /* priority_queue_insert (PQ_CHILDREN, &parent->children_queue, */
-	  /* 			 task, task->priority, */
-	  /* 			 PRIORITY_INSERT_BEGIN, */
-	  /* 			 /\*adjust_parent_depends_on=*\/true, */
-	  /* 			 task->parent_depends_on); */
 	  ++parent->num_children;
 	  ++parent->queued_children;
 	  if (parent->taskwait)
@@ -1221,11 +1153,6 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
 	{
 	  ++taskgroup->num_children;
 	  ++taskgroup->queued_children;
-	  /* priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
-	  /* 			 task, task->priority, */
-	  /* 			 PRIORITY_INSERT_BEGIN, */
-	  /* 			 /\*adjust_parent_depends_on=*\/false, */
-	  /* 			 task->parent_depends_on); */
 	  if (taskgroup->in_taskgroup_wait)
 	    {
 	      /* One more task has had its dependencies met.
@@ -1319,8 +1246,6 @@ gomp_task_run_post_remove_taskgroup (struct gomp_task *child_task)
 	 need a release barrier here to ensure memory
 	 written by child_task->fn above is flushed
 	 before the NULL is written.  */
-      //__atomic_store_n (&taskgroup->num_children, );
-
       if (taskgroup->in_taskgroup_wait)
 	{
 	  taskgroup->in_taskgroup_wait = false;
@@ -1478,7 +1403,6 @@ GOMP_taskwait (void)
     return;
 
   memset (&taskwait, 0, sizeof (taskwait));
-  //bool child_q = false;
   gomp_mutex_lock (&team->task_lock);
   bool ignored;
   while (1)
@@ -1593,20 +1517,8 @@ GOMP_taskwait (void)
 	  size_t new_tasks
 	    = gomp_task_run_post_handle_depend (child_task, team);
 
-	  /* is this enough? */
-	  /* __atomic_sub_fetch(&task->parent->num_children, 1, MEMMODEL_RELEASE); */
-	  /* child_task->pnode[PQ_CHILDREN].next = NULL; */
-	  /* child_task->pnode[PQ_CHILDREN].prev = NULL; */
-
-	  /* __atomic_sub_fetch (&child_task->parent->num_children, 1, */
-	  /* 		      MEMMODEL_RELEASE); */
-	  /* child_task->pnode[PQ_CHILDREN].next = NULL; */
-	  /* child_task->pnode[PQ_CHILDREN].prev = NULL; */
-
-	  /*  not this? */
 	  gomp_task_run_post_remove_parent (child_task);
 	  gomp_task_run_post_remove_taskgroup (child_task);
-
 
 	  to_free = child_task;
 	  child_task = NULL;
@@ -1954,7 +1866,6 @@ GOMP_taskgroup_end (void)
       bool cancelled = false;
 
       if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
-	  //__atomic_load_n (&taskgroup->queued_children, MEMMODEL_ACQUIRE) == 0)
 	{
 	  printf ("don't Have queued children...\n");
 	  if (__atomic_load_n (&taskgroup->num_children, MEMMODEL_ACQUIRE) == 0)
@@ -2052,7 +1963,6 @@ GOMP_taskgroup_end (void)
 	  size_t new_tasks
 	    = gomp_task_run_post_handle_depend (child_task, team);
 	  gomp_task_run_post_remove_parent (child_task);
-	  //gomp_clear_parent (&child_task->children_queue);
 	  gomp_task_run_post_remove_taskgroup (child_task);
 	  to_free = child_task;
 	  child_task = NULL;
