@@ -13620,8 +13620,8 @@ package body Sem_Prag is
          -- Async_Readers/Async_Writers/Effective_Reads/Effective_Writes --
          ------------------------------------------------------------------
 
-         --  pragma Asynch_Readers   [ (boolean_EXPRESSION) ];
-         --  pragma Asynch_Writers   [ (boolean_EXPRESSION) ];
+         --  pragma Async_Readers    [ (boolean_EXPRESSION) ];
+         --  pragma Async_Writers    [ (boolean_EXPRESSION) ];
          --  pragma Effective_Reads  [ (boolean_EXPRESSION) ];
          --  pragma Effective_Writes [ (boolean_EXPRESSION) ];
 
@@ -14113,9 +14113,14 @@ package body Sem_Prag is
 
             Expr := Get_Pragma_Arg (Arg2);
 
-            --  Deal with SCO generation
+            --  Mark the pragma (or, if rewritten from an aspect, the original
+            --  aspect) as enabled. Nothing to do for an internally generated
+            --  check for a dynamic predicate.
 
-            if Is_Checked (N) and then not Split_PPC (N) then
+            if Is_Checked (N)
+              and then not Split_PPC (N)
+              and then Cname /= Name_Dynamic_Predicate
+            then
                Set_SCO_Pragma_Enabled (Loc);
             end if;
 

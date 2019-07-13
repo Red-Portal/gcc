@@ -5087,7 +5087,6 @@ package body Exp_Ch4 is
    ------------------------------
 
    procedure Expand_N_Case_Expression (N : Node_Id) is
-
       function Is_Copy_Type (Typ : Entity_Id) return Boolean;
       --  Return True if we can copy objects of this type when expanding a case
       --  expression.
@@ -5106,7 +5105,7 @@ package body Exp_Ch4 is
              or else
                (Minimize_Expression_With_Actions
                  and then Is_Constrained (Underlying_Type (Typ))
-                 and then not Is_Limited_View (Underlying_Type (Typ)));
+                 and then not Is_Limited_Type (Underlying_Type (Typ)));
       end Is_Copy_Type;
 
       --  Local variables
@@ -5283,6 +5282,7 @@ package body Exp_Ch4 is
          declare
             Alt_Expr : Node_Id             := Expression (Alt);
             Alt_Loc  : constant Source_Ptr := Sloc (Alt_Expr);
+            LHS      : Node_Id;
             Stmts    : List_Id;
 
          begin
@@ -5312,9 +5312,12 @@ package body Exp_Ch4 is
             --    Target := AX['Unrestricted_Access];
 
             else
+               LHS := New_Occurrence_Of (Target, Loc);
+               Set_Assignment_OK (LHS);
+
                Stmts := New_List (
                  Make_Assignment_Statement (Alt_Loc,
-                   Name       => New_Occurrence_Of (Target, Loc),
+                   Name       => LHS,
                    Expression => Alt_Expr));
             end if;
 
@@ -12047,10 +12050,13 @@ package body Exp_Ch4 is
 
          begin
             --  Avoid infinite recursion on the subsequent expansion of
-            --  of the copy of the original type conversion.
+            --  of the copy of the original type conversion. When needed,
+            --  a range check has already been applied to the expression.
 
             Set_Comes_From_Source (New_Expr, False);
-            Insert_Action (N, Make_Predicate_Check (Target_Type, New_Expr));
+            Insert_Action (N,
+               Make_Predicate_Check (Target_Type, New_Expr),
+               Suppress => Range_Check);
          end;
       end if;
    end Expand_N_Type_Conversion;

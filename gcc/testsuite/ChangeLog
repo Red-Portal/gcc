@@ -1,3 +1,175 @@
+2019-07-13  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/91149
+	* c-c++-common/gomp/reduction-task-3.c: New test.
+
+	* c-c++-common/gomp/order-3.c: New test.
+	* c-c++-common/gomp/order-4.c: New test.
+
+2019-07-12  Bill Seurer  <seurer@linux.vnet.ibm.com>
+
+	* gcc.dg/tree-ssa/vector-7.c: Fix typo.
+
+2019-07-12  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* gcc.dg/pr57438-2.c: Remove.
+
+2019-07-12  Martin Sebor  <msebor@redhat.com>
+
+	* gcc.dg/Warray-bounds-43.c: New test.
+
+2019-07-12  Jan Hubicka  <jh@suse.cz>
+
+	* gcc.dg/tree-ssa/alias-access-path-9.c: New testcase.
+
+2019-07-08  Jiangning Liu  <jiangning.liu@amperecomputing.com>
+
+	PR tree-optimization/89430
+	* gcc.dg/tree-ssa/pr89430-1.c: New test.
+	* gcc.dg/tree-ssa/pr89430-2.c: New test.
+	* gcc.dg/tree-ssa/pr89430-3.c: New test.
+	* gcc.dg/tree-ssa/pr89430-4.c: New test.
+	* gcc.dg/tree-ssa/pr89430-5.c: New test.
+	* gcc.dg/tree-ssa/pr89430-6.c: New test.
+
+2019-07-12  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91145
+	* gcc.dg/torture/pr91145.c: New testcase.
+
+2019-07-12  Alexandre Oliva <oliva@adacore.com>
+
+	* gcc.dg/gimplefe-44.c: New.
+	* gcc.dg/gimplefe-43.c: New.
+
+2019-07-12  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/tree-ssa/vector-7.c: New testcase.
+
+2019-07-12  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-c++-common/gomp/order-1.c: New test.
+	* c-c++-common/gomp/order-2.c: New test.
+
+2019-07-11  Sunil K Pandey  <sunil.k.pandey@intel.com>
+
+	PR target/90980
+	* gcc.target/i386/pr90980-1.c: New test.
+	* gcc.target/i386/pr90980-2.c: Likewise.
+	* gcc.target/i386/pr90980-3.c: Likewise.
+
+2019-07-11  Yannick Moy  <moy@adacore.com>
+
+	* gnat.dg/loop_entry1.adb: New testcase.
+
+2019-07-11  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/prot8.adb, gnat.dg/prot8.ads: New testcase.
+
+2019-07-11  Justin Squirek  <squirek@adacore.com>
+
+	* gnat.dg/unreferenced2.adb: New testcase.
+
+2019-07-11  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/self_ref1.adb: New testcase.
+
+2019-07-11  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/predicate11.adb: New testcase.
+
+2019-07-11  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/equal9.adb: New testcase.
+
+2019-07-11  Thomas Quinot  <quinot@adacore.com>
+
+	* gnat.dg/scos1.adb: New testcase.
+
+2019-07-11  Justin Squirek  <squirek@adacore.com>
+
+	* gnat.dg/access7.adb: New testcase.
+
+2019-07-11  Yannick Moy  <moy@adacore.com>
+
+	* gnat.dg/warn21.adb, gnat.dg/warn21.ads: New testcase.
+
+2019-07-11  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/91131
+	* gcc.target/i386/pr91131.c: New testcase.
+
+2019-07-10  Martin Sebor  <msebor@redhat.com>
+
+	PR testsuite/91132
+	* gcc.dg/strlenopt-67.c: Removed second copy of test.
+
+2019-07-10  Vladimir Makarov  <vmakarov@redhat.com>
+
+	PR target/91102
+	* gcc.target/aarch64/pr91102.c: New test.
+
+2019-07-10  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91126
+	* gcc.dg/torture/pr91126.c: New testcase.
+
+2019-07-10  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/torture/ssa-fre-5.c: New testcase.
+	* gcc.dg/torture/ssa-fre-6.c: Likewise.
+	* gcc.dg/torture/ssa-fre-7.c: Likewise.
+
+2019-07-10  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/modular5.adb: New testcase.
+
+2019-07-10  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/limited3.adb, gnat.dg/limited3_pkg.adb,
+	gnat.dg/limited3_pkg.ads: New testcase.
+
+2019-07-10  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/incomplete7.adb, gnat.dg/incomplete7.ads: New testcase.
+
+2019-07-10  Hristian Kirtchev  <kirtchev@adacore.com>
+
+	* gnat.dg/limited2.adb, gnat.dg/limited2_pack_1.adb,
+	gnat.dg/limited2_pack_1.ads, gnat.dg/limited2_pack_2.adb,
+	gnat.dg/limited2_pack_2.ads: New testcase.
+
+2019-07-10  Ed Schonberg  <schonberg@adacore.com>
+
+	* gnat.dg/equal8.adb, gnat.dg/equal8.ads,
+	gnat.dg/equal8_pkg.ads: New testcase.
+
+2019-07-10  Paolo Carlini  <paolo.carlini@oracle.com>
+
+	* g++.dg/diagnostic/complex-invalid-1.C: New.
+	* g++.dg/diagnostic/static-cdtor-1.C: Likewise.
+	* g++.dg/cpp1z/has-unique-obj-representations2.C: Test location
+	too.
+	* g++.dg/other/anon-union3.C: Adjust expected location.
+	* g++.dg/parse/error8.C: Likewise.
+
+2019-07-09  Jan Hubicka  <hubicka@ucw.cz>
+
+	* g++.dg/lto/alias-3_0.C: New file.
+	* g++.dg/lto/alias-3_1.c: New file.
+
+2019-07-09  Martin Sebor  <msebor@redhat.com>
+
+	PR tree-optimization/90989
+	* gcc.dg/strlenopt-26.c: Exit with test result status.
+	* gcc.dg/strlenopt-67.c: New test.
+
+2019-07-09  Dragan Mladjenovic  <dmladjenovic@wavecomp.com>
+
+	* gcc.target/mips/cfgcleanup-jalr1.c: New test.
+	* gcc.target/mips/cfgcleanup-jalr2.c: New test.
+	* gcc.target/mips/cfgcleanup-jalr3.c: New test.
+
 2019-07-09  Richard Biener  <rguenther@suse.de>
 
 	PR tree-optimization/91114
@@ -1697,8 +1869,8 @@
 
 2019-06-12  Przemyslaw Wirkus  <przemyslaw.wirkus@arm.com>
 
-        * gcc.target/arm/ssadv16qi.c: New test.
-        * gcc.target/arm/usadv16qi.c: Likewise.
+	* gcc.target/arm/ssadv16qi.c: New test.
+	* gcc.target/arm/usadv16qi.c: Likewise.
 
 2019-06-12  Jakub Jelinek  <jakub@redhat.com>
 
@@ -2981,123 +3153,123 @@
 
 2019-05-16  Martin Sebor  <msebor@redhat.com>
 
-        * c-c++-common/Wbool-operation-1.c: Adjust text of expected diagnostics.
-        * c-c++-common/Wvarargs-2.c: Same.
-        * c-c++-common/Wvarargs.c: Same.
-        * c-c++-common/pr51768.c: Same.
-        * c-c++-common/tm/inline-asm.c: Same.
-        * c-c++-common/tm/safe-1.c: Same.
-        * g++.dg/asm-qual-1.C: Same.
-        * g++.dg/asm-qual-3.C: Same.
-        * g++.dg/conversion/dynamic1.C: Same.
-        * g++.dg/cpp0x/constexpr-89599.C: Same.
-        * g++.dg/cpp0x/constexpr-cast.C: Same.
-        * g++.dg/cpp0x/constexpr-shift1.C: Same.
-        * g++.dg/cpp0x/lambda/lambda-conv11.C: Same.
-        * g++.dg/cpp0x/nullptr04.C: Same.
-        * g++.dg/cpp0x/static_assert12.C: Same.
-        * g++.dg/cpp0x/static_assert8.C: Same.
-        * g++.dg/cpp1y/lambda-conv1.C: Same.
-        * g++.dg/cpp1y/pr79393-3.C: Same.
-        * g++.dg/cpp1y/static_assert1.C: Same.
-        * g++.dg/cpp1z/constexpr-if4.C: Same.
-        * g++.dg/cpp1z/constexpr-if5.C: Same.
-        * g++.dg/cpp1z/constexpr-if9.C: Same.
-        * g++.dg/eh/goto2.C: Same.
-        * g++.dg/eh/goto3.C: Same.
-        * g++.dg/expr/static_cast8.C: Same.
-        * g++.dg/ext/flexary5.C: Same.
-        * g++.dg/ext/utf-array-short-wchar.C: Same.
-        * g++.dg/ext/utf-array.C: Same.
-        * g++.dg/ext/utf8-2.C: Same.
-        * g++.dg/gomp/loop-4.C: Same.
-        * g++.dg/gomp/macro-4.C: Same.
-        * g++.dg/gomp/udr-1.C: Same.
-        * g++.dg/init/initializer-string-too-long.C: Same.
-        * g++.dg/other/offsetof9.C: Same.
-        * g++.dg/ubsan/pr63956.C: Same.
-        * g++.dg/warn/Wbool-operation-1.C: Same.
-        * g++.dg/warn/Wtype-limits-Wextra.C: Same.
-        * g++.dg/warn/Wtype-limits.C: Same.
-        * g++.dg/wrappers/pr88680.C: Same.
-        * g++.old-deja/g++.mike/eh55.C: Same.
-        * gcc.dg/Wsign-compare-1.c: Same.
-        * gcc.dg/Wtype-limits-Wextra.c: Same.
-        * gcc.dg/Wtype-limits.c: Same.
-        * gcc.dg/Wunknownprag.c: Same.
-        * gcc.dg/Wunsuffixed-float-constants-1.c: Same.
-        * gcc.dg/asm-6.c: Same.
-        * gcc.dg/asm-qual-1.c: Same.
-        * gcc.dg/cast-1.c: Same.
-        * gcc.dg/cast-2.c: Same.
-        * gcc.dg/cast-3.c: Same.
-        * gcc.dg/cpp/source_date_epoch-2.c: Same.
-        * gcc.dg/debug/pr85252.c: Same.
-        * gcc.dg/dfp/cast-bad.c: Same.
-        * gcc.dg/format/gcc_diag-1.c: Same.
-        * gcc.dg/format/gcc_diag-11.c: Same.
-        * gcc.dg/gcc_diag-11.c: Same.
-        * gcc.dg/gnu-cond-expr-2.c: Same.
-        * gcc.dg/gnu-cond-expr-3.c: Same.
-        * gcc.dg/gomp/macro-4.c: Same.
-        * gcc.dg/init-bad-1.c: Same.
-        * gcc.dg/init-bad-2.c: Same.
-        * gcc.dg/init-bad-3.c: Same.
-        * gcc.dg/pr27528.c: Same.
-        * gcc.dg/pr48552-1.c: Same.
-        * gcc.dg/pr48552-2.c: Same.
-        * gcc.dg/pr59846.c: Same.
-        * gcc.dg/pr61096-1.c: Same.
-        * gcc.dg/pr8788-1.c: Same.
-        * gcc.dg/pr90082.c: Same.
-        * gcc.dg/simd-2.c: Same.
-        * gcc.dg/spellcheck-params-2.c: Same.
-        * gcc.dg/spellcheck-params.c: Same.
-        * gcc.dg/strlenopt-49.c: Same.
-        * gcc.dg/tm/pr52141.c: Same.
-        * gcc.dg/torture/pr51106-1.c: Same.
-        * gcc.dg/torture/pr51106-2.c: Same.
-        * gcc.dg/utf-array-short-wchar.c: Same.
-        * gcc.dg/utf-array.c: Same.
-        * gcc.dg/utf8-2.c: Same.
-        * gcc.dg/warn-sprintf-no-nul.c: Same.
-        * gcc.target/i386/asm-flag-0.c: Same.
-        * gcc.target/i386/inline_error.c: Same.
-        * gcc.target/i386/pr30848.c: Same.
-        * gcc.target/i386/pr39082-1.c: Same.
-        * gcc.target/i386/pr39678.c: Same.
-        * gcc.target/i386/pr57756.c: Same.
-        * gcc.target/i386/pr68843-1.c: Same.
-        * gcc.target/i386/pr79804.c: Same.
-        * gcc.target/i386/pr82673.c: Same.
-        * obj-c++.dg/class-protocol-1.mm: Same.
-        * obj-c++.dg/exceptions-3.mm: Same.
-        * obj-c++.dg/exceptions-4.mm: Same.
-        * obj-c++.dg/exceptions-5.mm: Same.
-        * obj-c++.dg/exceptions-6.mm: Same.
-        * obj-c++.dg/method-12.mm: Same.
-        * obj-c++.dg/method-13.mm: Same.
-        * obj-c++.dg/method-6.mm: Same.
-        * obj-c++.dg/method-7.mm: Same.
-        * obj-c++.dg/method-9.mm: Same.
-        * obj-c++.dg/method-lookup-1.mm: Same.
-        * obj-c++.dg/proto-lossage-4.mm: Same.
-        * obj-c++.dg/protocol-qualifier-2.mm: Same.
-        * objc.dg/call-super-2.m: Same.
-        * objc.dg/class-protocol-1.m: Same.
-        * objc.dg/desig-init-1.m: Same.
-        * objc.dg/exceptions-3.m: Same.
-        * objc.dg/exceptions-4.m: Same.
-        * objc.dg/exceptions-5.m: Same.
-        * objc.dg/exceptions-6.m: Same.
-        * objc.dg/method-19.m: Same.
-        * objc.dg/method-2.m: Same.
-        * objc.dg/method-5.m: Same.
-        * objc.dg/method-6.m: Same.
-        * objc.dg/method-7.m: Same.
-        * objc.dg/method-lookup-1.m: Same.
-        * objc.dg/proto-hier-1.m: Same.
-        * objc.dg/proto-lossage-4.m: Same.
+	* c-c++-common/Wbool-operation-1.c: Adjust text of expected diagnostics.
+	* c-c++-common/Wvarargs-2.c: Same.
+	* c-c++-common/Wvarargs.c: Same.
+	* c-c++-common/pr51768.c: Same.
+	* c-c++-common/tm/inline-asm.c: Same.
+	* c-c++-common/tm/safe-1.c: Same.
+	* g++.dg/asm-qual-1.C: Same.
+	* g++.dg/asm-qual-3.C: Same.
+	* g++.dg/conversion/dynamic1.C: Same.
+	* g++.dg/cpp0x/constexpr-89599.C: Same.
+	* g++.dg/cpp0x/constexpr-cast.C: Same.
+	* g++.dg/cpp0x/constexpr-shift1.C: Same.
+	* g++.dg/cpp0x/lambda/lambda-conv11.C: Same.
+	* g++.dg/cpp0x/nullptr04.C: Same.
+	* g++.dg/cpp0x/static_assert12.C: Same.
+	* g++.dg/cpp0x/static_assert8.C: Same.
+	* g++.dg/cpp1y/lambda-conv1.C: Same.
+	* g++.dg/cpp1y/pr79393-3.C: Same.
+	* g++.dg/cpp1y/static_assert1.C: Same.
+	* g++.dg/cpp1z/constexpr-if4.C: Same.
+	* g++.dg/cpp1z/constexpr-if5.C: Same.
+	* g++.dg/cpp1z/constexpr-if9.C: Same.
+	* g++.dg/eh/goto2.C: Same.
+	* g++.dg/eh/goto3.C: Same.
+	* g++.dg/expr/static_cast8.C: Same.
+	* g++.dg/ext/flexary5.C: Same.
+	* g++.dg/ext/utf-array-short-wchar.C: Same.
+	* g++.dg/ext/utf-array.C: Same.
+	* g++.dg/ext/utf8-2.C: Same.
+	* g++.dg/gomp/loop-4.C: Same.
+	* g++.dg/gomp/macro-4.C: Same.
+	* g++.dg/gomp/udr-1.C: Same.
+	* g++.dg/init/initializer-string-too-long.C: Same.
+	* g++.dg/other/offsetof9.C: Same.
+	* g++.dg/ubsan/pr63956.C: Same.
+	* g++.dg/warn/Wbool-operation-1.C: Same.
+	* g++.dg/warn/Wtype-limits-Wextra.C: Same.
+	* g++.dg/warn/Wtype-limits.C: Same.
+	* g++.dg/wrappers/pr88680.C: Same.
+	* g++.old-deja/g++.mike/eh55.C: Same.
+	* gcc.dg/Wsign-compare-1.c: Same.
+	* gcc.dg/Wtype-limits-Wextra.c: Same.
+	* gcc.dg/Wtype-limits.c: Same.
+	* gcc.dg/Wunknownprag.c: Same.
+	* gcc.dg/Wunsuffixed-float-constants-1.c: Same.
+	* gcc.dg/asm-6.c: Same.
+	* gcc.dg/asm-qual-1.c: Same.
+	* gcc.dg/cast-1.c: Same.
+	* gcc.dg/cast-2.c: Same.
+	* gcc.dg/cast-3.c: Same.
+	* gcc.dg/cpp/source_date_epoch-2.c: Same.
+	* gcc.dg/debug/pr85252.c: Same.
+	* gcc.dg/dfp/cast-bad.c: Same.
+	* gcc.dg/format/gcc_diag-1.c: Same.
+	* gcc.dg/format/gcc_diag-11.c: Same.
+	* gcc.dg/gcc_diag-11.c: Same.
+	* gcc.dg/gnu-cond-expr-2.c: Same.
+	* gcc.dg/gnu-cond-expr-3.c: Same.
+	* gcc.dg/gomp/macro-4.c: Same.
+	* gcc.dg/init-bad-1.c: Same.
+	* gcc.dg/init-bad-2.c: Same.
+	* gcc.dg/init-bad-3.c: Same.
+	* gcc.dg/pr27528.c: Same.
+	* gcc.dg/pr48552-1.c: Same.
+	* gcc.dg/pr48552-2.c: Same.
+	* gcc.dg/pr59846.c: Same.
+	* gcc.dg/pr61096-1.c: Same.
+	* gcc.dg/pr8788-1.c: Same.
+	* gcc.dg/pr90082.c: Same.
+	* gcc.dg/simd-2.c: Same.
+	* gcc.dg/spellcheck-params-2.c: Same.
+	* gcc.dg/spellcheck-params.c: Same.
+	* gcc.dg/strlenopt-49.c: Same.
+	* gcc.dg/tm/pr52141.c: Same.
+	* gcc.dg/torture/pr51106-1.c: Same.
+	* gcc.dg/torture/pr51106-2.c: Same.
+	* gcc.dg/utf-array-short-wchar.c: Same.
+	* gcc.dg/utf-array.c: Same.
+	* gcc.dg/utf8-2.c: Same.
+	* gcc.dg/warn-sprintf-no-nul.c: Same.
+	* gcc.target/i386/asm-flag-0.c: Same.
+	* gcc.target/i386/inline_error.c: Same.
+	* gcc.target/i386/pr30848.c: Same.
+	* gcc.target/i386/pr39082-1.c: Same.
+	* gcc.target/i386/pr39678.c: Same.
+	* gcc.target/i386/pr57756.c: Same.
+	* gcc.target/i386/pr68843-1.c: Same.
+	* gcc.target/i386/pr79804.c: Same.
+	* gcc.target/i386/pr82673.c: Same.
+	* obj-c++.dg/class-protocol-1.mm: Same.
+	* obj-c++.dg/exceptions-3.mm: Same.
+	* obj-c++.dg/exceptions-4.mm: Same.
+	* obj-c++.dg/exceptions-5.mm: Same.
+	* obj-c++.dg/exceptions-6.mm: Same.
+	* obj-c++.dg/method-12.mm: Same.
+	* obj-c++.dg/method-13.mm: Same.
+	* obj-c++.dg/method-6.mm: Same.
+	* obj-c++.dg/method-7.mm: Same.
+	* obj-c++.dg/method-9.mm: Same.
+	* obj-c++.dg/method-lookup-1.mm: Same.
+	* obj-c++.dg/proto-lossage-4.mm: Same.
+	* obj-c++.dg/protocol-qualifier-2.mm: Same.
+	* objc.dg/call-super-2.m: Same.
+	* objc.dg/class-protocol-1.m: Same.
+	* objc.dg/desig-init-1.m: Same.
+	* objc.dg/exceptions-3.m: Same.
+	* objc.dg/exceptions-4.m: Same.
+	* objc.dg/exceptions-5.m: Same.
+	* objc.dg/exceptions-6.m: Same.
+	* objc.dg/method-19.m: Same.
+	* objc.dg/method-2.m: Same.
+	* objc.dg/method-5.m: Same.
+	* objc.dg/method-6.m: Same.
+	* objc.dg/method-7.m: Same.
+	* objc.dg/method-lookup-1.m: Same.
+	* objc.dg/proto-hier-1.m: Same.
+	* objc.dg/proto-lossage-4.m: Same.
 
 2019-05-17  Dragan Mladjenovic  <dmladjenovic@wavecomp.com>
 
@@ -3210,7 +3382,7 @@
 2019-05-15  Janne Blomqvist  <jb@gcc.gnu.org>
 
 	PR fortran/90461
-        * gfortran.dg/open_errors_2.f90: Add -std=f2008, adjust line number.
+	* gfortran.dg/open_errors_2.f90: Add -std=f2008, adjust line number.
 	* gfortran.dg/open_errors_3.f90: New test.
 
 2019-05-15  H.J. Lu  <hongjiu.lu@intel.com>
@@ -3938,10 +4110,10 @@
 
 2019-04-29  Vladislav Ivanishin  <vlad@ispras.ru>
 
-        * gcc.dg/uninit-25-gimple.c: New test.
-        * gcc.dg/uninit-25.c: New test.
-        * gcc.dg/uninit-26.c: New test.
-        * gcc.dg/uninit-27-gimple.c: New test.
+	* gcc.dg/uninit-25-gimple.c: New test.
+	* gcc.dg/uninit-25.c: New test.
+	* gcc.dg/uninit-26.c: New test.
+	* gcc.dg/uninit-27-gimple.c: New test.
 
 2019-04-29  Richard Biener  <rguenther@suse.de>
 

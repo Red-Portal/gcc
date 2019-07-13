@@ -174,6 +174,11 @@ package Bindo.Graphs is
    First_Library_Graph_Vertex : constant Library_Graph_Vertex_Id :=
                                   No_Library_Graph_Vertex + 1;
 
+   procedure Destroy_Library_Graph_Vertex
+     (Vertex : in out Library_Graph_Vertex_Id);
+   pragma Inline (Destroy_Library_Graph_Vertex);
+   --  Destroy library graph vertex Vertex
+
    function Hash_Library_Graph_Vertex
      (Vertex : Library_Graph_Vertex_Id) return Bucket_Range_Type;
    pragma Inline (Hash_Library_Graph_Vertex);
@@ -182,6 +187,11 @@ package Bindo.Graphs is
    function Present (Vertex : Library_Graph_Vertex_Id) return Boolean;
    pragma Inline (Present);
    --  Determine whether library graph vertex Vertex exists
+
+   package LGV_Lists is new Doubly_Linked_Lists
+     (Element_Type    => Library_Graph_Vertex_Id,
+      "="             => "=",
+      Destroy_Element => Destroy_Library_Graph_Vertex);
 
    package LGV_Sets is new Membership_Sets
      (Element_Type => Library_Graph_Vertex_Id,
@@ -1156,6 +1166,13 @@ package Bindo.Graphs is
       pragma Inline (Is_Spec);
       --  Determine whether vertex Vertex of library graph G denotes a spec
 
+      function Is_Spec_Before_Body_Edge
+        (G    : Library_Graph;
+         Edge : Library_Graph_Edge_Id) return Boolean;
+      pragma Inline (Is_Spec_Before_Body_Edge);
+      --  Determine whether edge Edge of library graph G links a predecessor
+      --  spec and a successor body belonging to the same unit.
+
       function Is_Spec_With_Body
         (G      : Library_Graph;
          Vertex : Library_Graph_Vertex_Id) return Boolean;
@@ -1406,11 +1423,6 @@ package Bindo.Graphs is
       -- Vertices --
       --------------
 
-      procedure Destroy_Library_Graph_Vertex
-        (Vertex : in out Library_Graph_Vertex_Id);
-      pragma Inline (Destroy_Library_Graph_Vertex);
-      --  Destroy library graph vertex Vertex
-
       --  The following type represents the attributes of a library graph
       --  vertex.
 
@@ -1593,15 +1605,6 @@ package Bindo.Graphs is
          Destroy_Value         => Destroy_Library_Graph_Cycle_Attributes,
          Hash                  => Hash_Library_Graph_Cycle);
 
-      ---------------------
-      -- Recorded cycles --
-      ---------------------
-
-      package RC_Sets is new Membership_Sets
-        (Element_Type => Library_Graph_Cycle_Attributes,
-         "="          => Same_Library_Graph_Cycle_Attributes,
-         Hash         => Hash_Library_Graph_Cycle_Attributes);
-
       --------------------
       -- Recorded edges --
       --------------------
@@ -1692,10 +1695,6 @@ package Bindo.Graphs is
          Graph : DG.Directed_Graph := DG.Nil;
          --  The underlying graph describing the relations between edges and
          --  vertices.
-
-         Recorded_Cycles : RC_Sets.Membership_Set := RC_Sets.Nil;
-         --  The set of recorded cycles, used to prevent duplicate cycles in
-         --  the graph.
 
          Recorded_Edges : RE_Sets.Membership_Set := RE_Sets.Nil;
          --  The set of recorded edges, used to prevent duplicate edges in the

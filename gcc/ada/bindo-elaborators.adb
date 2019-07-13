@@ -54,6 +54,7 @@ use  Bindo.Writers.Dependency_Writers;
 use  Bindo.Writers.Elaboration_Order_Writers;
 use  Bindo.Writers.Invocation_Graph_Writers;
 use  Bindo.Writers.Library_Graph_Writers;
+use  Bindo.Writers.Phase_Writers;
 use  Bindo.Writers.Unit_Closure_Writers;
 
 with GNAT;        use GNAT;
@@ -273,6 +274,10 @@ package body Bindo.Elaborators is
       pragma Inline (Is_Suitable_Weakly_Elaborable_Vertex);
       --  Determine whether vertex Vertex of library graph G is suitable for
       --  weak elaboration.
+
+      procedure Set_Unit_Elaboration_Positions (Order : Unit_Id_Table);
+      pragma Inline (Set_Unit_Elaboration_Positions);
+      --  Set the ALI.Units positions of all elaboration units in order Order
 
       procedure Trace_Component
         (G    : Library_Graph;
@@ -707,6 +712,8 @@ package body Bindo.Elaborators is
          Status    : Elaboration_Order_Status;
 
       begin
+         Start_Phase (Unit_Elaboration);
+
          --  Initialize all unit-related data structures and gather all units
          --  that need elaboration.
 
@@ -750,6 +757,11 @@ package body Bindo.Elaborators is
          if Status = Order_OK then
             Validate_Elaboration_Order (Order);
 
+            --  Set attribute Elab_Position of table ALI.Units for all units in
+            --  the elaboration order.
+
+            Set_Unit_Elaboration_Positions (Order);
+
             --  Output the dependencies among units when switch -e (output
             --  complete list of elaboration order dependencies) is active.
 
@@ -777,6 +789,7 @@ package body Bindo.Elaborators is
          --  Destroy all unit-related data structures
 
          Finalize_Units;
+         End_Phase (Unit_Elaboration);
 
          --  Halt the bind when there is no satisfactory elaboration order
 
@@ -1303,6 +1316,23 @@ package body Bindo.Elaborators is
            Is_Dynamically_Elaborated (G, Vertex)
              and then Is_Weakly_Elaborable_Vertex (G, Vertex);
       end Is_Suitable_Weakly_Elaborable_Vertex;
+
+      ------------------------------------
+      -- Set_Unit_Elaboration_Positions --
+      ------------------------------------
+
+      procedure Set_Unit_Elaboration_Positions (Order : Unit_Id_Table) is
+         U_Id : Unit_Id;
+
+      begin
+         for Position in Unit_Id_Tables.First ..
+                         Unit_Id_Tables.Last (Order)
+         loop
+            U_Id := Order.Table (Position);
+
+            ALI.Units.Table (U_Id).Elab_Position := Position;
+         end loop;
+      end Set_Unit_Elaboration_Positions;
 
       ---------------------
       -- Trace_Component --

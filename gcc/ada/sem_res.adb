@@ -3458,12 +3458,17 @@ package body Sem_Res is
       begin
          --  Nothing to do if no parameters, or original node is neither a
          --  function call nor a procedure call statement (happens in the
-         --  operator-transformed-to-function call case), or the call does
+         --  operator-transformed-to-function call case), or the call is to an
+         --  operator symbol (which is usually in infix form), or the call does
          --  not come from source, or this warning is off.
 
          if not Warn_On_Parameter_Order
            or else No (Parameter_Associations (N))
            or else Nkind (Original_Node (N)) not in N_Subprogram_Call
+           or else (Nkind (Name (N)) = N_Identifier
+                     and then Present (Entity (Name (N)))
+                     and then Nkind (Entity (Name (N))) =
+                                N_Defining_Operator_Symbol)
            or else not Comes_From_Source (N)
          then
             return;
@@ -6944,7 +6949,9 @@ package body Sem_Res is
       --  Check the dimensions of the actuals in the call. For function calls,
       --  propagate the dimensions from the returned type to N.
 
-      Analyze_Dimension_Call (N, Nam);
+      if not In_Inlined_Body then
+         Analyze_Dimension_Call (N, Nam);
+      end if;
 
       --  All done, evaluate call and deal with elaboration issues
 
@@ -8471,7 +8478,12 @@ package body Sem_Res is
                   Get_Next_Interp (I, It);
                end loop;
 
-               if Present (Alias (Entity (N))) then
+               --  If expansion is active and this is an inherited operation,
+               --  replace it with its ancestor. This must not be done during
+               --  preanalysis because the type may not be frozen yet, as when
+               --  the context is a precondition or postcondition.
+
+               if Present (Alias (Entity (N))) and then Expander_Active then
                   Set_Entity (N, Alias (Entity (N)));
                end if;
             end;
@@ -10081,15 +10093,20 @@ package body Sem_Res is
 
          declare
             Opnd : constant Node_Id := Right_Opnd (N);
+            Op_Id : Entity_Id;
+
          begin
             if B_Typ = Standard_Boolean
               and then Nkind_In (Opnd, N_Op_Eq, N_Op_Ne)
               and then Is_Overloaded (Opnd)
             then
                Resolve_Equality_Op (Opnd, B_Typ);
+               Op_Id := Entity (Opnd);
 
-               if Ekind (Entity (Opnd)) = E_Function then
-                  Rewrite_Operator_As_Call (Opnd, Entity (Opnd));
+               if Ekind (Op_Id) = E_Function
+                 and then not Is_Intrinsic_Subprogram (Op_Id)
+               then
+                  Rewrite_Operator_As_Call (Opnd, Op_Id);
                end if;
 
                if not Inside_A_Generic or else Is_Entity_Name (Opnd) then

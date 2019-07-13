@@ -1832,10 +1832,20 @@ vn_walk_cb_data::push_partial_def (const pd_data &pd, tree vuse,
 			    0, MIN ((HOST_WIDE_INT)sizeof (buffer), pd.size));
 		  else
 		    {
+		      unsigned pad = 0;
+		      if (BYTES_BIG_ENDIAN
+			  && is_a <scalar_mode> (TYPE_MODE (TREE_TYPE (pd.rhs))))
+			{
+			  /* On big-endian the padding is at the 'front' so
+			     just skip the initial bytes.  */
+			  fixed_size_mode mode = as_a <fixed_size_mode>
+					       (TYPE_MODE (TREE_TYPE (pd.rhs)));
+			  pad = GET_MODE_SIZE (mode) - pd.size;
+			}
 		      len = native_encode_expr (pd.rhs,
 						buffer + MAX (0, pd.offset),
 						sizeof (buffer - MAX (0, pd.offset)),
-						MAX (0, -pd.offset));
+						MAX (0, -pd.offset) + pad);
 		      if (len <= 0
 			  || len < (pd.size - MAX (0, -pd.offset)))
 			{
@@ -2488,12 +2498,22 @@ vn_reference_lookup_3 (ao_ref *ref, tree vuse, void *data_,
 	   && gimple_assign_rhs_code (def_stmt) == CONSTRUCTOR
 	   && CONSTRUCTOR_NELTS (gimple_assign_rhs1 (def_stmt)) == 0)
     {
+      tree lhs = gimple_assign_lhs (def_stmt);
       tree base2;
       poly_int64 offset2, size2, maxsize2;
       HOST_WIDE_INT offset2i, size2i;
       bool reverse;
-      base2 = get_ref_base_and_extent (gimple_assign_lhs (def_stmt),
-				       &offset2, &size2, &maxsize2, &reverse);
+      if (lhs_ref_ok)
+	{
+	  base2 = ao_ref_base (&lhs_ref);
+	  offset2 = lhs_ref.offset;
+	  size2 = lhs_ref.size;
+	  maxsize2 = lhs_ref.max_size;
+	  reverse = reverse_storage_order_for_component_p (lhs);
+	}
+      else
+	base2 = get_ref_base_and_extent (lhs,
+					 &offset2, &size2, &maxsize2, &reverse);
       if (known_size_p (maxsize2)
 	  && known_eq (maxsize2, size2)
 	  && adjust_offsets_for_equal_base_address (base, &offset,
@@ -2541,12 +2561,22 @@ vn_reference_lookup_3 (ao_ref *ref, tree vuse, void *data_,
 	       || (TREE_CODE (gimple_assign_rhs1 (def_stmt)) == SSA_NAME
 		   && is_gimple_min_invariant (SSA_VAL (gimple_assign_rhs1 (def_stmt))))))
     {
+      tree lhs = gimple_assign_lhs (def_stmt);
       tree base2;
       poly_int64 offset2, size2, maxsize2;
       HOST_WIDE_INT offset2i, size2i;
       bool reverse;
-      base2 = get_ref_base_and_extent (gimple_assign_lhs (def_stmt),
-				       &offset2, &size2, &maxsize2, &reverse);
+      if (lhs_ref_ok)
+	{
+	  base2 = ao_ref_base (&lhs_ref);
+	  offset2 = lhs_ref.offset;
+	  size2 = lhs_ref.size;
+	  maxsize2 = lhs_ref.max_size;
+	  reverse = reverse_storage_order_for_component_p (lhs);
+	}
+      else
+	base2 = get_ref_base_and_extent (lhs,
+					 &offset2, &size2, &maxsize2, &reverse);
       if (base2
 	  && !reverse
 	  && known_eq (maxsize2, size2)
@@ -2568,9 +2598,20 @@ vn_reference_lookup_3 (ao_ref *ref, tree vuse, void *data_,
 	      tree rhs = gimple_assign_rhs1 (def_stmt);
 	      if (TREE_CODE (rhs) == SSA_NAME)
 		rhs = SSA_VAL (rhs);
+	      unsigned pad = 0;
+	      if (BYTES_BIG_ENDIAN
+		  && is_a <scalar_mode> (TYPE_MODE (TREE_TYPE (rhs))))
+		{
+		  /* On big-endian the padding is at the 'front' so
+		     just skip the initial bytes.  */
+		  fixed_size_mode mode
+		    = as_a <fixed_size_mode> (TYPE_MODE (TREE_TYPE (rhs)));
+		  pad = GET_MODE_SIZE (mode) - size2i / BITS_PER_UNIT;
+		}
 	      len = native_encode_expr (rhs,
 					buffer, sizeof (buffer),
-					(offseti - offset2i) / BITS_PER_UNIT);
+					((offseti - offset2i) / BITS_PER_UNIT
+					 + pad));
 	      if (len > 0 && len * BITS_PER_UNIT >= maxsizei)
 		{
 		  tree type = vr->type;
@@ -2627,12 +2668,21 @@ vn_reference_lookup_3 (ao_ref *ref, tree vuse, void *data_,
 	      downstream, not so much for actually doing the insertion.  */
 	   && data->partial_defs.is_empty ())
     {
+      tree lhs = gimple_assign_lhs (def_stmt);
       tree base2;
       poly_int64 offset2, size2, maxsize2;
       bool reverse;
-      base2 = get_ref_base_and_extent (gimple_assign_lhs (def_stmt),
-				       &offset2, &size2, &maxsize2,
-				       &reverse);
+      if (lhs_ref_ok)
+	{
+	  base2 = ao_ref_base (&lhs_ref);
+	  offset2 = lhs_ref.offset;
+	  size2 = lhs_ref.size;
+	  maxsize2 = lhs_ref.max_size;
+	  reverse = reverse_storage_order_for_component_p (lhs);
+	}
+      else
+	base2 = get_ref_base_and_extent (lhs,
+					 &offset2, &size2, &maxsize2, &reverse);
       tree def_rhs = gimple_assign_rhs1 (def_stmt);
       if (!reverse
 	  && known_size_p (maxsize2)
