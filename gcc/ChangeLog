@@ -1,3 +1,314 @@
+2019-07-17  Alexandre Oliva <oliva@adacore.com>
+
+	PR middle-end/81824
+	* attribs.c (decls_mismatched_attributes): Simplify the logic
+	that avoids duplicates and false positives.
+
+2019-07-17  John David Anglin  <danglin@gcc.gnu.org>
+
+	* config/pa/pa.c (pa_som_asm_init_sections): Don't force all constant
+	data into data section when generating PIC code.
+	(pa_select_section): Use pa_reloc_rw_mask() to qualify relocs.
+	(pa_reloc_rw_mask): Return 3 when generating PIC code and when
+	generating code for SOM targets earlier than HP-UX 11.  Otherwise,
+	return 2 for SOM and 0 for other targets.
+	 
+2019-07-17  Jeff Law  <law@redhat.com>
+
+	* tree-ssa-dse.c (initialize_ao_ref_for_dse): Fix formatting.
+	(dse_walker::dse_optimize_stmt): Likewise.  Add missing return to
+	avoid unexpected switch statement fallthru.
+
+2019-07-17  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/i386.md (*add<dwi>3_doubleword):
+	Remove redundant constraints.
+	(*add<mode>_1): Ditto.
+	(*addhi_1): Ditto.
+	(*addqi_1): Ditto.
+	(*addqi_1_slp): Ditto.
+	(*add<mode>_2): Ditto.
+	(*addv<mode>4): Ditto.
+	(*sub<dwi>3_doubleword): Ditto.
+	(*sub<mode>_1): Ditto.
+	(*subqi_1_slp): Ditto.
+	(*sub<mode>_2): Ditto.
+	(*subv<mode>4): Ditto.
+	(*sub<mode>_3): Ditto.
+	(@add<mode>3_carry): Ditto.
+	(@sub<mode>3_carry): Ditto.
+	(*add<mode>3_cc_overflow_1): Ditto.
+	(*add<mode>3_zext_cc_overflow_2): Ditto.
+	(*anddi_1): Ditto.
+	(*and<mode>_1): Ditto.
+	(*andqi_1): Ditto.
+	(*andqi_1_slp): Ditto.
+	(*anddi_2): Ditto.
+	(*andqi_2_maybe_si): Ditto.
+	(*and<mode>_2): Ditto.
+	(*andqi_2_slp): Ditto.
+	(*<code><mode>_1): Ditto.
+	(*<code>qi_1): Ditto.
+	(*<code>qi_1_slp): Ditto.
+	(*<code><mode>_2): Ditto.
+	(*<code>qi_2_slp): Ditto.
+
+2019-07-17  Jan Hubicka  <hubicka@ucw.cz>
+
+	* alias.c (record_component_aliases): Do not simplify pointed-to
+	types of ODR types.
+
+2019-07-17  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/i386.md (*andqi_2_maybe_si): Handle potential
+	partial reg stall on alternative 2.
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91178
+	* tree-ssa.c (release_defs_bitset): Iterate from higher to
+	lower SSA names to avoid quadratic behavior in the common case.
+	* tree-data-ref.c (split_constant_offset): Add limit argument
+	and pass it down.  Initialize it from PARAM_SSA_NAME_DEF_CHAIN_LIMIT.
+	(split_constant_offset_1): Add limit argument and use it to
+	limit SSA def walking.  Optimize the common plus/minus case.
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91178
+	* tree-vect-stmts.c (get_group_load_store_type): For SLP
+	loads with a gap larger than the vector size always use
+	VMAT_STRIDED_SLP.
+	(vectorizable_load): For VMAT_STRIDED_SLP with a permutation
+	avoid loading vectors that are only contained in the gap
+	and thus are not needed.
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91180
+	* tree-ssa-sccvn.c (vn_reference_lookup_3): Fix offset
+	computation for memset partial defs.
+
+2019-07-17  Jakub Jelinek  <jakub@redhat.com>
+
+	* gimple.h (enum gf_mask): Remove GF_OMP_FOR_SIMD, change
+	GF_OMP_FOR_KIND_SIMD to a value serially after other kinds,
+	divide GF_OMP_FOR_KIND_MASK, GF_OMP_FOR_COMBINED,
+	GF_OMP_FOR_COMBINED_INTO, GF_OMP_FOR_GRID_PHONY,
+	GF_OMP_FOR_GRID_INTRA_GROUP and GF_OMP_FOR_GRID_GROUP_ITER by two.
+	* omp-grid.c (grid_process_grid_body,
+	grid_eliminate_combined_simd_part): Use GF_OMP_FOR_KIND_SIMD instead
+	of GF_OMP_FOR_SIMD, don't test & GF_OMP_FOR_SIMD but
+	== GF_OMP_FOR_KIND_SIMD.
+	* omp-low.c (build_outer_var_ref, scan_sharing_clauses,
+	check_omp_nesting_restrictions, scan_omp_1_stmt,
+	lower_rec_input_clauses, lower_lastprivate_conditional_clauses,
+	lower_lastprivate_clauses, lower_reduction_clauses, lower_omp_scan,
+	omp_find_scan): Likewise.
+	* omp-expand.c (expand_omp_for): Likewise.
+	* omp-general.c (omp_extract_for_data): Likewise.
+
+	PR tree-optimization/91157
+	* tree-vect-generic.c (expand_vector_comparison): Handle lhs being
+	a vector boolean with scalar mode.
+	(expand_vector_condition): Handle first operand being a vector boolean
+	with scalar mode.
+	(expand_vector_operations_1): For comparisons, don't bail out early
+	if the return type is vector boolean with scalar mode, but comparison
+	operand type is not.
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91181
+	* tree-vect-slp.c (vect_build_slp_tree_1): Do not compare
+	IFN_LOADs as calls.
+
+2019-07-16  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/i386.md (*testdi_1): Match CCZmode for
+	constants that might have the SImode sign bit set.
+	(*testqi_1_maybe_si): Remove "!" constraint modifier.
+	Use correct constraints for pentium pairing.
+	(*test<mode>_1): Ditto.
+
+2019-07-16  Jeff Law  <law@redhat.com>
+
+	PR rtl-optimization/91173
+	* tree-ssa-address.c (addr_for_mem_ref): If the base is an
+	SSA_NAME with a constant value, fold its value into the offset
+	and clear the base before calling gen_addr_rtx.
+
+2019-07-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/91164
+	* dse.c (rest_of_handle_dse): If dead edges have been purged,
+	invalidate dominance info.
+
+2019-07-16  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* read-md.h (md_reader::record_potential_iterator_use): Add a
+	file_location parameter.
+	* read-rtl.c (attribute_use::loc): New field.
+	(map_attr_string): Take a file_location parameter.  Report cases
+	in which attributes map to multiple distinct values.
+	(apply_attribute_uses): Update call accordingly.
+	(md_reader::handle_overloaded_name): Likewise.
+	(md_reader::apply_iterator_to_string): Likewise.  Skip empty
+	nonnull strings.
+	(record_attribute_use): Take a file_location parameter.
+	Initialize attribute_use::loc.
+	(md_reader::record_potential_iterator_use): Take a file_location
+	parameter.  Update call to record_attribute_use.
+	(rtx_reader::rtx_alloc_for_name): Update call accordingly.
+	(rtx_reader::read_rtx_code): Likewise.
+	(rtx_reader::read_rtx_operand): Likewise.  Record a location
+	for implicitly-expanded empty strings.
+
+2019-07-16  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* read-md.h (md_reader::ptr_loc): Moved from read-md.c.
+	Use file_location instead of separate fields.
+	(md_reader::set_md_ptr_loc): Take a file_location instead of a
+	separate filename and line number.
+	* read-md.c (ptr_loc): As above.
+	(md_reader::copy_md_ptr_loc): Update for new ptr_loc layout.
+	(md_reader::fprint_md_ptr_loc): Likewise.
+	(md_reader::set_md_ptr_loc): Likewise.  Take a file_location
+	instead of a separate filename and line number.
+	(md_reader::read_string): Update call accordingly.
+
+2019-07-16  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/rs6000/rs6000.md (*mov<mode>_update1): Explicitly
+	use <SFDF:mode>, <SFDF:MODE>, <SFDF:Ff> and <SFDF:bits> rather than
+	leaving the choice between SFDF and P implicit.
+	(*mov<mode>_update2): Likewise.
+	(*cmp<IBM128:mode>_internal2): Explicitly use <IBM128:MODE>
+	rather than leaving the choice betweem IBM128 and GPR implicit.
+	(*fix<uns>_trunc<IEEE128:mode><QHSI:mode>2_mem): Explicitly use
+	<IEEE128:MODE> rather than leaving the choice between IEEE128 and
+	QHSI implicit.
+	(AltiVec define_peephole2s): Explicitly use <ALTIVEC_DFORM:MODE>
+	rather than leaving the choice between ALTIVEC_DFORM and P implicit.
+	* config/rs6000/vsx.md
+	(*vsx_ext_<VSX_EXTRACT_I:VS_scalar>_fl_<FL_CONV:mode>)
+	(*vsx_ext_<VSX_EXTRACT_I:VS_scalar>_ufl_<FL_CONV:mode>): Explicitly
+	use <FL_CONV:VSisa> rather than leaving the choice between FL_CONV
+	and VSX_EXTRACT_I implicit.
+
+2019-07-16  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/mips/micromips.md (*movep<MOVEP1:mode><MOVEP2:mode>):
+	Explicitly use <MOVEP1:MODE> for the mode attribute.
+
+2019-07-16  Jan Hubicka  <hubicka@ucw.cz>
+
+	PR bootstrap/91176
+	* ipa-fnsummary.c (analyze_function_body): Skip debug stmts
+
+2019-07-15  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/91050
+	* config/rs6000/rs6000.c (rs6000_file_start): Never skip emitting a
+	.machine directive.
+
+2019-07-15  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/i386.md (@test<mode>_ccno_1):
+	Rename from test<mode>_ccno_1.
+	(*testdi_1): Remove redundant alternatives.  Remove modrm attribute.
+	(*testqi_1_maybe_si): Remove modrm attribute.
+	(*test<mode>_1): Ditto.
+	* config/i386/i386-expand.c (ix86_split_idivmod): Use
+	gen_test_ccno_1 and gen_extend_insn.
+
+2019-07-15  Jan Hubicka  <hubicka@ucw.cz>
+
+	* tree-ssa-alias.c (aliasing_component_refs_walk): Initialize same_p
+	to 0.
+
+2019-07-15  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/91162
+	* tree-cfg.c (move_block_to_fn): When releasing a virtual PHI
+	node make sure to replace all uses with something valid.
+
+2019-07-15  Kewen Lin  <linkw@gcc.gnu.org>
+
+	PR tree-optimization/88497
+	* tree-ssa-reassoc.c (reassociate_bb): Swap the positions of
+	GIMPLE_BINARY_RHS check and gimple_visited_p check, call new
+	function undistribute_bitref_for_vector.
+	(undistribute_bitref_for_vector): New function.
+	(cleanup_vinfo_map): Likewise.
+	(sort_by_mach_mode): Likewise.
+
+2019-07-14  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/i386.md (nonmemory_szext_operand): New mode attribute.
+	(test<mode>_ccno_1): Macroize insn pattern from testsi_ccno_1
+	and testdi_ccno_1 using SWI48 mode attribute.
+	(*testdi_1): Use x86_64_szext_nonmemory_operand instead of
+	x86_64_szext_general_operand.
+	(*testqi_1_maybe_si): Use nonmemory_operand instead of general_operand.
+	(*test<mode>_1): Use nonmemory_szext_operand mode attribute
+	instead of genera_operand mode attribute.
+
+2019-07-14  Vladislav Ivanishin <vlad@ispras.ru>
+
+	* gdbhooks.py (DumpFn.invoke): Add explicit casts of return values of
+	fopen and fclose to their respective types.
+	(DotFn.invoke): Ditto.
+
+2019-07-14  Jan Hubicka  <hubicka@ucw.cz>
+
+	* ipa-fnsummary.c (ipa_dump_hints): Do not dump array_index.
+	(ipa_fn_summary::~ipa_fn_summary): Do not destroy array_index.
+	(ipa_fn_summary_t::duplicate): Do not duplicate array_index.
+	(array_index_predicate): Remove.
+	(analyze_function_body): Account cost for variable ofsetted array
+	indexing.
+	(estimate_node_size_and_time): Do not compute array index hint.
+	(ipa_merge_fn_summary_after_inlining): Do not merge array index hint.
+	(inline_read_section): Do not read array index hint.
+	(ipa_fn_summary_write): Do not write array index hint.
+	* doc/invoke.texi (ipa-cp-array-index-hint-bonus): Remove.
+	* ipa-cp.c (hint_time_bonus): Remove.
+	* ipa-fnsummary.h (ipa_hints_vals): Remove array_index.
+	(ipa_fnsummary): Remove array_index.
+	* ipa-inline.c (want_inline_small_function_p): Do not use
+	array_index.
+	(edge_badness): Likewise.
+	* params.def (PARAM_IPA_CP_ARRAY_INDEX_HINT_BONUS): Remove.
+
+2019-07-14  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/91148
+	* config/rs6000/rs6000-c.c (altivec_resolve_overloaded_builtin): Remove
+	superfluous "builtin function" phrasing.
+
+2019-07-13  Jan Hubicka  <hubicka@ucw.cz>
+
+	* tree-ssa-alias.c (component_ref_to_zero_sized_trailing_array_p):
+	Break out from ...
+	(aliasing_component_refs_walk): Break out from ...
+	(aliasing_component_refs_p): ... here.
+
+2019-07-13  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/91148
+	* config/rs6000/rs6000.c (rs6000_invalid_builtin): Remove superfluous
+	"builtin function" phrasing.
+
+2019-07-13  Prathamesh Kulkarni  <prathamesh.kulkarni@linaro.org>
+
+	PR target/90723
+	* recog.h (temporary_volatile_ok): New class.
+	* config/aarch64/aarch64.c (aarch64_emit_sve_pred_move): Set
+	volatile_ok temporarily to true using temporary_volatile_ok.
+	* expr.c (emit_block_move_via_cpymem): Likewise.
+	* optabs.c (maybe_legitimize_operand): Likewise.
+
 2019-07-13  Jakub Jelinek  <jakub@redhat.com>
 
 	* gimplify.c (struct gimplify_omp_ctx): Add order_concurrent member.
@@ -6001,7 +6312,6 @@
 	(*call_value_nonlocal_aix): Likewise.
 	(*call_indirect_pcrel): New insn.
 	(*call_value_indirect_pcrel): Likewise.
-
 
 2019-05-29  Uroš Bizjak  <ubizjak@gmail.com>
 

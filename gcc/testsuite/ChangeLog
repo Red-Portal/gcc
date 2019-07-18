@@ -1,3 +1,194 @@
+2019-07-17  Alexandre Oliva <oliva@adacore.com>
+
+	PR middle-end/81824
+	* g++.dg/Wmissing-attributes-1.C: New.  Some of its fragments
+	are from Martin Sebor.
+
+2019-07-17  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/90455
+	* g++.dg/cpp0x/nsdmi-list6.C: New test.
+
+2019-07-17  Jan Hubicka  <hubicka@ucw.cz>
+
+	* g++.dg/lto/alias-4_0.C
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91178
+	* gcc.dg/torture/pr91178.c: New testcase.
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91180
+	* gcc.dg/torture/pr91180.c: New testcase.
+
+2019-07-17  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/91157
+	* gcc.target/i386/avx512f-pr91157.c: New test.
+	* gcc.target/i386/avx512bw-pr91157.c: New test.
+
+2019-07-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91181
+	* gcc.dg/pr91181.c: New testcase.
+
+2019-07-16  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/90903
+	* gfortran.dg/check_bits_1.f90: New testcase.
+
+2019-07-16  Jeff Law  <law@redhat.com>
+
+	PR rtl-optimization/91173
+	* g++.dg/pr91173.C: New test.
+
+2019-07-16  Wilco Dijkstra  <wdijkstr@arm.com>
+
+	PR target/89190
+	* gcc.target/arm/pr89190.c: New test.
+
+2019-07-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/91164
+	* g++.dg/opt/pr91164.C: New test.
+
+2019-07-16  Jan Hubicka  <jh@suse.cz>
+
+	* g++.dg/lto/alias-1_0.C: Use -O3.
+	* g++.dg/lto/alias-2_0.C: Use -O3.
+	* g++.dg/lto/alias-3_0.C: Add loop to enable inlining with
+	-fno-use-linker-plugin.
+	* g++.dg/lto/alias-3_1.C: Remove dg-lto-do and dg-lto-options.
+
+2019-07-16  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* gcc.dg/tree-ssa/pr84512.c: Don't xfail scan-tree-dump on
+	sparcv9.
+
+2019-07-16  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* gcc.dg/autopar/pr91162.c: Require int128 support.
+
+2019-07-15  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/91162
+	* gcc.dg/autopar/pr91162.c: New testcase.
+
+2019-07-15  Kewen Lin  <linkw@gcc.gnu.org>
+
+	PR tree-optimization/88497
+	* gcc.dg/tree-ssa/pr88497-1.c: New test.
+	* gcc.dg/tree-ssa/pr88497-2.c: Likewise.
+	* gcc.dg/tree-ssa/pr88497-3.c: Likewise.
+	* gcc.dg/tree-ssa/pr88497-4.c: Likewise.
+	* gcc.dg/tree-ssa/pr88497-5.c: Likewise.
+	* gcc.dg/tree-ssa/pr88497-6.c: Likewise.
+	* gcc.dg/tree-ssa/pr88497-7.c: Likewise.
+
+2019-07-14  Jerry DeLisle  <jvdelisle@gcc.gnu.org>
+
+	PR fortran/87233
+	* gfortran.dg/initialization_14.f90: Modify to now pass by
+	removing two dg-error commands. Added comments.
+	* gfortran.dg/initialization_30.f90: New test that includes the
+	two tests removed above with the 'dg-options -std=f95'.
+
+2019-07-14  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* gcc.dg/tree-ssa/pr84512.c (dg-final): Remove XFAIL on alpha*-*-*.
+
+2019-07-14  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/91148
+	* gcc.target/powerpc/bfp/scalar-extract-exp-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-sig-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-5.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-8.c: Adjust.
+	* gcc.target/powerpc/byte-in-set-2.c: Adjust.
+	* gcc.target/powerpc/cmpb-3.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-all-nez-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-any-eqz-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xl-len-13.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xst-len-12.c: Adjust.
+
+2019-07-13  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* gcc.target/powerpc/stabs-attrib-vect-darwin.c: Require stabs
+	support.
+
+2019-07-13  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/91148
+	* gcc.target/powerpc/bfp/scalar-cmp-exp-eq-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-cmp-exp-gt-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-cmp-exp-lt-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-cmp-exp-unordered-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-exp-1.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-exp-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-exp-4.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-sig-1.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-sig-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-extract-sig-4.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-1.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-10.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-4.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-5.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-7.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-insert-exp-8.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-test-data-class-11.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-test-data-class-6.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-test-data-class-7.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-test-neg-2.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-test-neg-3.c: Adjust.
+	* gcc.target/powerpc/bfp/scalar-test-neg-5.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-extract-exp-2.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-extract-exp-3.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-extract-sig-2.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-extract-sig-3.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-insert-exp-2.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-insert-exp-3.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-insert-exp-6.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-insert-exp-7.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-test-data-class-2.c: Adjust.
+	* gcc.target/powerpc/bfp/vec-test-data-class-3.c: Adjust.
+	* gcc.target/powerpc/byte-in-either-range-1.c: Adjust.
+	* gcc.target/powerpc/byte-in-range-1.c: Adjust.
+	* gcc.target/powerpc/byte-in-set-1.c: Adjust.
+	* gcc.target/powerpc/byte-in-set-2.c: Adjust.
+	* gcc.target/powerpc/cmpb-3.c: Adjust.
+	* gcc.target/powerpc/crypto-builtin-2.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-1.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-11.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-16.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-21.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-26.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-31.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-36.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-41.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-46.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-51.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-56.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-6.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-61.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-66.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-71.c: Adjust.
+	* gcc.target/powerpc/dfp/dtstsfi-76.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-all-nez-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-any-eqz-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-cmpnez-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-cntlz-lsbb-2.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-cnttz-lsbb-2.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xl-len-12.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xl-len-13.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xlx-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xrx-7.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xst-len-12.c: Adjust.
+	* gcc.target/powerpc/vsu/vec-xst-len-13.c: Adjust.
+
 2019-07-13  Jakub Jelinek  <jakub@redhat.com>
 
 	PR c/91149
