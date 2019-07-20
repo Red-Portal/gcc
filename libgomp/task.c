@@ -492,13 +492,12 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		goto do_cancel;
 	    }
 	}
+
       if (taskgroup)
-	{
-	  ++taskgroup->num_children;
-	  ++taskgroup->queued_children;
-	}
-      ++parent->num_children;
-      ++parent->queued_children;
+	  __sync_add_and_fetch (&taskgroup->num_children, 1, MEMMODEL_RELEASE);
+      __sync_add_and_fetch (&parent->num_children, 1, MEMMODEL_RELEASE);
+      __sync_add_and_fetch (&team->task_count, 1, MEMMODEL_RELEASE);
+
       if (depend_size)
 	{
 	  gomp_task_handle_depend (task, parent, depend);
@@ -522,8 +521,11 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 			     /*adjust_parent_depends_on=*/false,
 			     task->parent_depends_on);
 
-      ++team->task_count;
-      ++team->task_queued_count;
+      if (taskgroup)
+	__sync_add_and_fetch (&taskgroup->queued_children, 1, MEMMODEL_RELEASE);
+      __sync_add_and_fetch (&parent->queued_children, 1, MEMMODEL_RELEASE);
+      __sync_add_and_fetch (&team->task_queued_count, 1, MEMMODEL_RELEASE);
+
       if(taskgroup)
 	  printf("Added %uth task, taskgroup: %d, parent: %d\n",
 		 team->task_count, (int)taskgroup->num_children, (int)parent->num_children);
@@ -793,7 +795,8 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
       if (task->num_dependees)
 	{
 	  if (taskgroup)
-	    taskgroup->num_children++;
+	    __sync_add_and_fetch (&taskgroup->num_children, 1,
+				  MEMMODEL_RELEASE);
 	  gomp_mutex_unlock (&team->task_lock);
 	  return true;
 	}
@@ -806,13 +809,6 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
       free (task);
       return false;
     }
-  if (taskgroup)
-    {
-      ++taskgroup->num_children;
-      ++taskgroup->queued_children;
-    }
-  ++parent->num_children;
-  ++parent->queued_children;
 
   /* For async offloading, if we don't need to wait for dependencies,
      run the gomp_target_task_fn right away, essentially schedule the
@@ -820,10 +816,9 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
   if (devicep != NULL
       && (devicep->capabilities & GOMP_OFFLOAD_CAP_OPENMP_400))
     {
-      task->pnode[PQ_TEAM].next = NULL;
-      task->pnode[PQ_TEAM].prev = NULL;
+	//task->pnode.next = NULL;
+	//task->pnode.prev = NULL;
       task->kind = GOMP_TASK_TIED;
-      ++team->task_count;
       gomp_mutex_unlock (&team->task_lock);
 
       thr->task = task;
@@ -843,12 +838,21 @@ gomp_create_target_task (struct gomp_device_descr *devicep,
       return true;
     }
 
+  if (taskgroup)
+      __sync_add_and_fetch (&taskgroup->num_children, 1, MEMMODEL_RELEASE);
+  __sync_add_and_fetch (&parent->num_children, 1, MEMMODEL_RELEASE);
+  __sync_add_and_fetch (&team->task_count, 1, MEMMODEL_RELEASE);
+
   priority_queue_insert (PQ_TEAM, &team->task_queue, task, 0,
 			 PRIORITY_INSERT_END,
 			 /*adjust_parent_depends_on=*/false,
 			 task->parent_depends_on);
-  ++team->task_count;
-  ++team->task_queued_count;
+
+  if (taskgroup)
+      __sync_add_and_fetch (&taskgroup->queued_children, 1, MEMMODEL_RELEASE);
+  __sync_add_and_fetch (&parent->queued_children, 1, MEMMODEL_RELEASE);
+  __sync_add_and_fetch (&team->task_queued_count, 1, MEMMODEL_RELEASE);
+
   gomp_team_barrier_set_task_pending (&team->barrier);
   do_wake = team->task_running_count + !parent->in_tied_task
 	    < team->nthreads;
@@ -912,118 +916,33 @@ priority_list_upgrade_task (struct priority_list *list,
 /* Given a parent_depends_on TASK in its parent's children_queue, move
    it to the front of its priority so it is run as soon as possible.
 
-   PARENT is passed as an optimization.
-
-   (This function could be defined in priority_queue.c, but we want it
-   inlined, and putting it in priority_queue.h is not an option, given
-   that gomp_task has not been properly defined at that point).  */
-
-/* static void inline */
-/* priority_queue_upgrade_task (struct gomp_task *task, */
-/* 			     struct gomp_task *parent) */
-/* { */
-/*   struct priority_queue *head = &parent->children_queue; */
-/*   struct priority_node *node = &task->pnode[PQ_CHILDREN]; */
-/* #if _LIBGOMP_CHECKING_ */
-/*   if (!task->parent_depends_on) */
-/*     gomp_fatal ("priority_queue_upgrade_task: task must be a " */
-/* 		"parent_depends_on task"); */
-/*   if (!priority_queue_task_in_queue_p (PQ_CHILDREN, head, task)) */
-/*     gomp_fatal ("priority_queue_upgrade_task: cannot find task=%p", task); */
-/* #endif */
-/*   if (priority_queue_multi_p (head)) */
-/*     { */
-/*       struct priority_list *list */
-/* 	= priority_queue_lookup_priority (head, task->priority); */
-/*       priority_list_upgrade_task (list, node); */
-/*     } */
-/*   else */
-/*     priority_list_upgrade_task (&head->l, node); */
-/* } */
-
-/* Given a CHILD_TASK in LIST that is about to be executed, move it out of
-   the way in LIST so that other tasks can be considered for
-   execution.  LIST contains tasks of type TYPE.
-
-   Care is taken to update the queue's LAST_PARENT_DEPENDS_ON field
-   if applicable.  */
-
-static void inline
-priority_list_downgrade_task (enum priority_queue_type type,
-			      struct priority_list *list,
-			      struct gomp_task *child_task)
-{
-  struct priority_node *node = task_to_priority_node (type, child_task);
-  if (list->tasks == node)
-    list->tasks = node->next;
-  else if (node->next != list->tasks)
-    {
-      /* The task in NODE is about to become TIED and TIED tasks
-	 cannot come before WAITING tasks.  If we're about to
-	 leave the queue in such an indeterminate state, rewire
-	 things appropriately.  However, a TIED task at the end is
-	 perfectly fine.  */
-      struct gomp_task *next_task = priority_node_to_task (type, node->next);
-      if (next_task->kind == GOMP_TASK_WAITING)
-	{
-	  /* Remove from list.  */
-	  node->prev->next = node->next;
-	  node->next->prev = node->prev;
-	  /* Rewire at the end.  */
-	  node->next = list->tasks;
-	  node->prev = list->tasks->prev;
-	  list->tasks->prev->next = node;
-	  list->tasks->prev = node;
-	}
-    }
-
-  /* If the current task is the last_parent_depends_on for its
-     priority, adjust last_parent_depends_on appropriately.  */
-  if (__builtin_expect (child_task->parent_depends_on, 0)
-      && list->last_parent_depends_on == node)
-    {
-      struct gomp_task *prev_child = priority_node_to_task (type, node->prev);
-      if (node->prev != node
-	  && prev_child->kind == GOMP_TASK_WAITING
-	  && prev_child->parent_depends_on)
-	list->last_parent_depends_on = node->prev;
-      else
-	{
-	  /* There are no more parent_depends_on entries waiting
-	     to run, clear the list.  */
-	  list->last_parent_depends_on = NULL;
-	}
-    }
-}
-
-/* Given a TASK in HEAD that is about to be executed, move it out of
-   the way so that other tasks can be considered for execution.  HEAD
-   contains tasks of type TYPE.
-
-   Care is taken to update the queue's LAST_PARENT_DEPENDS_ON field
-   if applicable.
+   TEAM is passed as an optimization.
 
    (This function could be defined in priority_queue.c, but we want it
    inlined, and putting it in priority_queue.h is not an option, given
    that gomp_task has not been properly defined at that point).  */
 
 static void inline
-priority_queue_downgrade_task (enum priority_queue_type type,
-			       struct priority_queue *head,
-			       struct gomp_task *task)
+priority_queue_upgrade_task (struct gomp_team *team,
+			     struct gomp_task *task)
 {
+  struct priority_queue *head = &team->task_queue;
+  struct priority_node *node = &task->pnode;
 #if _LIBGOMP_CHECKING_
-  if (!priority_queue_task_in_queue_p (type, head, task))
-    gomp_fatal ("Attempt to downgrade missing task %p", task);
+  if (!task->parent_depends_on)
+    gomp_fatal ("priority_queue_upgrade_task: task must be a "
+		"parent_depends_on task");
+  if (!priority_queue_task_in_queue_p (PQ_TEAM, head, task))
+    gomp_fatal ("priority_queue_upgrade_task: cannot find task=%p", task);
 #endif
   if (priority_queue_multi_p (head))
     {
       struct priority_list *list
 	= priority_queue_lookup_priority (head, task->priority);
-      priority_list_downgrade_task (type, list, task);
+      priority_list_upgrade_task (list, node);
     }
   else
-    priority_list_downgrade_task (type, &head->l, task);
+    priority_list_upgrade_task (&head->l, node);
 }
 
 /* Setup CHILD_TASK to execute.  This is done by setting the task to
@@ -1045,8 +964,8 @@ gomp_task_run_pre (struct gomp_task *child_task, struct gomp_task *parent,
   struct gomp_taskgroup *taskgroup = child_task->taskgroup;
   priority_queue_remove (PQ_TEAM, &team->task_queue, child_task,
 			 MEMMODEL_RELAXED);
-  child_task->pnode[PQ_TEAM].next = NULL;
-  child_task->pnode[PQ_TEAM].prev = NULL;
+  child_task->pnode.next = NULL;
+  child_task->pnode.prev = NULL;
   child_task->kind = GOMP_TASK_TIED;
 
   if(taskgroup)
@@ -1129,8 +1048,7 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
       struct gomp_taskgroup *taskgroup = task->taskgroup;
       if (parent)
 	{
-	  ++parent->num_children;
-	  ++parent->queued_children;
+	  __sync_add_and_fetch (&parent->queued_children, 1, MEMMODEL_RELEASE);
 	  if (parent->taskwait)
 	    {
 	      if (parent->taskwait->in_taskwait)
@@ -1151,8 +1069,7 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
 	}
       if (taskgroup)
 	{
-	  ++taskgroup->num_children;
-	  ++taskgroup->queued_children;
+	  __sync_add_and_fetch (&taskgroup->queued_children, 1, MEMMODEL_RELEASE);
 	  if (taskgroup->in_taskgroup_wait)
 	    {
 	      /* One more task has had its dependencies met.
@@ -1166,8 +1083,8 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
 			     PRIORITY_INSERT_END,
 			     /*adjust_parent_depends_on=*/false,
 			     task->parent_depends_on);
-      ++team->task_count;
-      ++team->task_queued_count;
+      __sync_add_and_fetch (&task->queued_children, 1, MEMMODEL_RELEASE);
+      __sync_add_and_fetch (&team->task_queued_count, 1, MEMMODEL_RELEASE);
       ++ret;
     }
   free (child_task->dependers);
@@ -1221,8 +1138,6 @@ gomp_task_run_post_remove_parent (struct gomp_task *child_task)
       parent->taskwait->in_taskwait = false;
       gomp_sem_post (&parent->taskwait->taskwait_sem);
     }
-  child_task->pnode[PQ_CHILDREN].next = NULL;
-  child_task->pnode[PQ_CHILDREN].prev = NULL;
 }
 
 /* Remove CHILD_TASK from its taskgroup.  */
@@ -1233,12 +1148,6 @@ gomp_task_run_post_remove_taskgroup (struct gomp_task *child_task)
   struct gomp_taskgroup *taskgroup = child_task->taskgroup;
   if (taskgroup == NULL)
     return;
-  /* bool empty = priority_queue_remove (PQ_TASKGROUP, */
-  /* 				      &taskgroup->taskgroup_queue, */
-  /* 				      child_task, MEMMODEL_RELAXED); */
-
-  child_task->pnode[PQ_TASKGROUP].next = NULL;
-  child_task->pnode[PQ_TASKGROUP].prev = NULL;
   if (__atomic_sub_fetch(&taskgroup->num_children, 1, MEMMODEL_RELEASE) == 0)
     {
       /* We access taskgroup->num_children in GOMP_taskgroup_end
@@ -1351,7 +1260,6 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	  size_t new_tasks
 	    = gomp_task_run_post_handle_depend (child_task, team);
 	  gomp_task_run_post_remove_parent (child_task);
-	  //gomp_clear_parent (&child_task->children_queue);
 	  gomp_task_run_post_remove_taskgroup (child_task);
 	  to_free = child_task;
 	  child_task = NULL;
@@ -1410,8 +1318,14 @@ GOMP_taskwait (void)
       bool cancelled = false;
       if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
 	{
-	    printf ("Taskwait: don't Have queued children...\n");
-	  if (task->num_children == 0)
+	  printf ("Taskwait: don't Have queued children...\n");
+	  printf (
+	    "Taskwait: Have %d children and %d queued children %d queued...\n",
+	    (int) __atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE),
+	    (int) __atomic_load_n (&task->queued_children, MEMMODEL_ACQUIRE),
+	    (int) __atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE));
+
+	  if (__atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE) == 0)
 	    {
 	      bool destroy_taskwait = task->taskwait != NULL;
 	      task->taskwait = NULL;
@@ -1429,10 +1343,11 @@ GOMP_taskwait (void)
 	    goto do_wait;
 	}
       else
-	  printf("Taskwait: Have %d children and %d queued children %d queued...\n",
-		 (int)__atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE),
-		 (int)__atomic_load_n (&task->queued_children, MEMMODEL_ACQUIRE),
-		 (int)__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) );
+	printf (
+	  "Taskwait: Have %d children and %d queued children %d queued...\n",
+	  (int) __atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE),
+	  (int) __atomic_load_n (&task->queued_children, MEMMODEL_ACQUIRE),
+	  (int) __atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE));
 
       next_task = priority_queue_next_task (PQ_TEAM, &team->task_queue,
 					    PQ_IGNORED, NULL, &ignored);
@@ -1591,9 +1506,9 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
   size_t n = 2;
   size_t i;
   size_t num_awaited = 0;
-  //struct gomp_task *child_task = NULL;
+  struct gomp_task *child_task = NULL;
   struct gomp_task *to_free = NULL;
-  //int do_wake = 0;
+  int do_wake = 0;
 
   if (ndepend == 0)
     {
@@ -1639,8 +1554,8 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 		/* If depenency TSK itself has no dependencies and is
 		   ready to run, move it up front so that we run it as
 		   soon as possible.  */
-		/* if (tsk->num_dependees == 0 && tsk->kind == GOMP_TASK_WAITING) */
-		/*   priority_queue_upgrade_task (tsk, task); */
+		if (tsk->num_dependees == 0 && tsk->kind == GOMP_TASK_WAITING)
+		  priority_queue_upgrade_task (team, task);
 	      }
 	  }
     }
@@ -1657,7 +1572,7 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 
   while (1)
     {
-	//bool cancelled = false;
+      bool cancelled = false;
       if (taskwait.n_depend == 0)
 	{
 	  task->taskwait = NULL;
@@ -1670,6 +1585,8 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 	  gomp_sem_destroy (&taskwait.taskwait_sem);
 	  return;
 	}
+      /* else if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED)) */
+      /* 	  goto do_wait; */
 
       /* Theoretically when we have multiple priorities, we should
 	 chose between the highest priority item in
@@ -1684,102 +1601,106 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 	 care should be taken to only use priority_queue_remove()
 	 below if the task was actually removed from the children
 	 queue.  */
-      /* bool ignored; */
-      /* struct gomp_task *next_task */
-      /* 	= priority_queue_next_task (PQ_CHILDREN, &task->children_queue, */
-      /* 				    PQ_IGNORED, NULL, &ignored); */
+      bool ignored;
+      struct gomp_task *next_task
+      	= priority_queue_next_task (PQ_TEAM, &team->task_queue,
+      				    PQ_IGNORED, NULL, &ignored);
 
 
-      /* if (next_task->kind == GOMP_TASK_WAITING) */
-      /* 	{ */
-      /* 	  child_task = next_task; */
-      /* 	  cancelled */
-      /* 	    = gomp_task_run_pre (child_task, task, team); */
-      /* 	  if (__builtin_expect (cancelled, 0)) */
-      /* 	    { */
-      /* 	      if (to_free) */
-      /* 		{ */
-      /* 		  gomp_finish_task (to_free); */
-      /* 		  free (to_free); */
-      /* 		  to_free = NULL; */
-      /* 		} */
-      /* 	      goto finish_cancelled; */
-      /* 	    } */
-      /* 	} */
-      /* else */
-      /* 	/\* All tasks we are waiting for are either running in other */
-      /* 	   threads, or they are tasks that have not had their */
-      /* 	   dependencies met (so they're not even in the queue).  Wait */
-      /* 	   for them.  *\/ */
-      /* 	taskwait.in_depend_wait = true; */
-      /* gomp_mutex_unlock (&team->task_lock); */
-      /* if (do_wake) */
-      /* 	{ */
-      /* 	  gomp_team_barrier_wake (&team->barrier, do_wake); */
-      /* 	  do_wake = 0; */
-      /* 	} */
-      /* if (to_free) */
-      /* 	{ */
-      /* 	  gomp_finish_task (to_free); */
-      /* 	  free (to_free); */
-      /* 	  to_free = NULL; */
-      /* 	} */
-      /* if (child_task) */
-      /* 	{ */
-      /* 	  thr->task = child_task; */
-      /* 	  if (__builtin_expect (child_task->fn == NULL, 0)) */
-      /* 	    { */
-      /* 	      if (gomp_target_task_fn (child_task->fn_data)) */
-      /* 		{ */
-      /* 		  thr->task = task; */
-      /* 		  gomp_mutex_lock (&team->task_lock); */
-      /* 		  child_task->kind = GOMP_TASK_ASYNC_RUNNING; */
-      /* 		  struct gomp_target_task *ttask */
-      /* 		    = (struct gomp_target_task *) child_task->fn_data; */
-      /* 		  /\* If GOMP_PLUGIN_target_task_completion has run already */
-      /* 		     in between gomp_target_task_fn and the mutex lock, */
-      /* 		     perform the requeuing here.  *\/ */
-      /* 		  if (ttask->state == GOMP_TARGET_TASK_FINISHED) */
-      /* 		    gomp_target_task_completion (team, child_task); */
-      /* 		  else */
-      /* 		    ttask->state = GOMP_TARGET_TASK_RUNNING; */
-      /* 		  child_task = NULL; */
-      /* 		  continue; */
-      /* 		} */
-      /* 	    } */
-      /* 	  else */
-      /* 	    child_task->fn (child_task->fn_data); */
-      /* 	  thr->task = task; */
-      /* 	} */
-      /* else */
-      /* 	gomp_sem_wait (&taskwait.taskwait_sem); */
-      /* gomp_mutex_lock (&team->task_lock); */
-      /* if (child_task) */
-      /* 	{ */
-      /* 	 finish_cancelled:; */
-      /* 	  size_t new_tasks */
-      /* 	    = gomp_task_run_post_handle_depend (child_task, team); */
-      /* 	  if (child_task->parent_depends_on) */
-      /* 	    --taskwait.n_depend; */
+      if (next_task->kind == GOMP_TASK_WAITING)
+      	{
+      	  child_task = next_task;
+      	  cancelled
+      	    = gomp_task_run_pre (child_task, task, team);
+      	  if (__builtin_expect (cancelled, 0))
+      	    {
+      	      if (to_free)
+      		{
+      		  gomp_finish_task (to_free);
+      		  free (to_free);
+      		  to_free = NULL;
+      		}
+      	      goto finish_cancelled;
+      	    }
+      	}
+      else
+	{
+	  /* All tasks we are waiting for are either running in other
+	     threads, or they are tasks that have not had their
+	     dependencies met (so they're not even in the queue).  Wait
+	     for them.  */
+	  taskwait.in_depend_wait = true;
+	}
+      gomp_mutex_unlock (&team->task_lock);
+      if (do_wake)
+      	{
+      	  gomp_team_barrier_wake (&team->barrier, do_wake);
+      	  do_wake = 0;
+      	}
+      if (to_free)
+      	{
+      	  gomp_finish_task (to_free);
+      	  free (to_free);
+      	  to_free = NULL;
+      	}
+      if (child_task)
+      	{
+      	  thr->task = child_task;
+      	  if (__builtin_expect (child_task->fn == NULL, 0))
+      	    {
+      	      if (gomp_target_task_fn (child_task->fn_data))
+      		{
+      		  thr->task = task;
+      		  gomp_mutex_lock (&team->task_lock);
+      		  child_task->kind = GOMP_TASK_ASYNC_RUNNING;
+      		  struct gomp_target_task *ttask
+      		    = (struct gomp_target_task *) child_task->fn_data;
+      		  /* If GOMP_PLUGIN_target_task_completion has run already
+      		     in between gomp_target_task_fn and the mutex lock,
+      		     perform the requeuing here.  */
+      		  if (ttask->state == GOMP_TARGET_TASK_FINISHED)
+      		    gomp_target_task_completion (team, child_task);
+      		  else
+      		    ttask->state = GOMP_TARGET_TASK_RUNNING;
+      		  child_task = NULL;
+      		  continue;
+      		}
+      	    }
+      	  else
+      	    child_task->fn (child_task->fn_data);
+      	  thr->task = task;
+      	}
+      else
+      	gomp_sem_wait (&taskwait.taskwait_sem);
+      gomp_mutex_lock (&team->task_lock);
+      if (child_task)
+      	{
+      	 finish_cancelled:;
+      	  size_t new_tasks
+      	    = gomp_task_run_post_handle_depend (child_task, team);
+      	  if (child_task->parent_depends_on)
+      	    --taskwait.n_depend;
 
-      /* 	  priority_queue_remove (PQ_CHILDREN, &task->children_queue, */
-      /* 				 child_task, MEMMODEL_RELAXED); */
-      /* 	  child_task->pnode[PQ_CHILDREN].next = NULL; */
-      /* 	  child_task->pnode[PQ_CHILDREN].prev = NULL; */
+      	  /* priority_queue_remove (PQ_CHILDREN, &task->children_queue, */
+      	  /* 			 child_task, MEMMODEL_RELAXED); */
+      	  /* child_task->pnode[PQ_CHILDREN].next = NULL; */
+      	  /* child_task->pnode[PQ_CHILDREN].prev = NULL; */
 
-      /* 	  gomp_clear_parent (&child_task->children_queue); */
-      /* 	  gomp_task_run_post_remove_taskgroup (child_task); */
-      /* 	  to_free = child_task; */
-      /* 	  child_task = NULL; */
-      /* 	  team->task_count--; */
-      /* 	  if (new_tasks > 1) */
-      /* 	    { */
-      /* 	      do_wake = team->nthreads - team->task_running_count */
-      /* 			- !task->in_tied_task; */
-      /* 	      if (do_wake > new_tasks) */
-      /* 		do_wake = new_tasks; */
-      /* 	    } */
-      /* 	} */
+      	  /* gomp_clear_parent (&child_task->children_queue); */
+
+	  gomp_task_run_post_remove_parent (child_task);
+      	  gomp_task_run_post_remove_taskgroup (child_task);
+      	  to_free = child_task;
+      	  child_task = NULL;
+      	  team->task_count--;
+      	  if (new_tasks > 1)
+      	    {
+      	      do_wake = team->nthreads - team->task_running_count
+      			- !task->in_tied_task;
+      	      if (do_wake > new_tasks)
+      		do_wake = new_tasks;
+      	    }
+      	}
     }
 }
 
@@ -1867,7 +1788,11 @@ GOMP_taskgroup_end (void)
 
       if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
 	{
-	  printf ("don't Have queued children...\n");
+	  printf ("Taskgroup: don't Have queued children...\n");
+	    printf("Taskgroup: Have %d children and %d queued children %d queued...\n",
+		 (int)__atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE),
+		 (int)__atomic_load_n (&task->queued_children, MEMMODEL_ACQUIRE),
+		 (int)__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) );
 	  if (__atomic_load_n (&taskgroup->num_children, MEMMODEL_ACQUIRE) == 0)
 	    {
 	      gomp_mutex_unlock (&team->task_lock);
@@ -1955,7 +1880,7 @@ GOMP_taskgroup_end (void)
 	  thr->task = task;
 	}
       else
-	gomp_sem_wait (&taskgroup->taskgroup_sem);
+      	gomp_sem_wait (&taskgroup->taskgroup_sem);
       gomp_mutex_lock (&team->task_lock);
       if (child_task)
 	{

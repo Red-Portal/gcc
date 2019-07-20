@@ -333,20 +333,13 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
-	  /* priority_queue_insert (PQ_CHILDREN, &parent->children_queue, */
-	  /* 			 task, priority, */
-	  /* 			 PRIORITY_INSERT_BEGIN, */
-	  /* 			 /\*last_parent_depends_on=*\/false, */
-	  /* 			 task->parent_depends_on); */
-	  /* if (taskgroup) */
-	  /*   priority_queue_insert (PQ_TASKGROUP, &taskgroup->taskgroup_queue, */
-	  /* 			   task, priority, PRIORITY_INSERT_BEGIN, */
-	  /* 			   /\*last_parent_depends_on=*\/false, */
-	  /* 			   task->parent_depends_on); */
 	  priority_queue_insert (PQ_TEAM, &team->task_queue, task, priority,
 				 PRIORITY_INSERT_END,
 				 /*last_parent_depends_on=*/false,
 				 task->parent_depends_on);
+	  ++parent->queued_children;
+	  if(taskgroup)
+	      ++taskgroup->queued_children;
 	  ++team->task_count;
 	  ++team->task_queued_count;
 	}

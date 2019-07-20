@@ -38,7 +38,7 @@
 
 #ifndef _LIBGOMP_CHECKING_
 /* Define to 1 to perform internal sanity checks.  */
-#define _LIBGOMP_CHECKING_ 0
+#define _LIBGOMP_CHECKING_ 1
 #endif
 
 #include "config.h"
@@ -471,7 +471,7 @@ struct gomp_task
      We put this here to avoid allocating space for each priority
      node.  Then we play offsetof() games to convert between pnode[]
      entries and the gomp_task in which they reside.  */
-  struct priority_node pnode[3];
+  struct priority_node pnode;
 
   struct gomp_task_icv icv;
   void (*fn) (void *);
@@ -1216,7 +1216,7 @@ extern int gomp_test_nest_lock_25 (omp_nest_lock_25_t *) __GOMP_NOTHROW;
 static inline size_t
 priority_queue_offset (enum priority_queue_type type)
 {
-  return offsetof (struct gomp_task, pnode[(int) type]);
+  return offsetof (struct gomp_task, pnode);
 }
 
 /* Return the task associated with a priority NODE of type TYPE.  */
