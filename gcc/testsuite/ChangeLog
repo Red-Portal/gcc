@@ -1,3 +1,94 @@
+2019-07-20  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	* gcc.target/powerpc/volatile-mem.c: New testcase.
+
+2019-07-20  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/91204
+	* gcc.c-torture/compile/pr91204.c: New test.
+
+	* c-c++-common/gomp/cancel-1.c: Adjust expected diagnostic wording.
+	* c-c++-common/gomp/clauses-1.c (foo, baz, bar): Add order(concurrent)
+	clause where allowed.  Add combined constructs with loop with all
+	possible clauses.
+	(qux): New function.
+	* c-c++-common/gomp/loop-1.c: New test.
+	* c-c++-common/gomp/loop-2.c: New test.
+	* c-c++-common/gomp/loop-3.c: New test.
+	* c-c++-common/gomp/loop-4.c: New test.
+	* c-c++-common/gomp/loop-5.c: New test.
+	* c-c++-common/gomp/order-3.c: Adjust expected diagnostic wording.
+	* c-c++-common/gomp/simd-setjmp-1.c: New test.
+	* c-c++-common/gomp/teams-2.c: Adjust expected diagnostic wording.
+
+	* gcc.dg/vect/vect-simd-16.c: New test.
+
+2019-07-19  Jeff Law  <law@redhat.com>
+
+	* gcc.dg/tree-ssa/ssa-dse-37.c: New test.
+	* gcc.dg/tree-ssa/ssa-dse-38.c: New test.
+
+2019-07-19  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91211
+	* gcc.dg/torture/pr91211.c: New testcase.
+
+2019-07-19  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91200
+	* gcc.dg/torture/pr91200.c: New testcase.
+
+2019-07-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/91190
+	* gcc.c-torture/compile/pr91190.c: New test.
+
+2019-07-19  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91207
+	* gcc.dg/torture/pr91207.c: New testcase.
+
+2019-07-18  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/91188
+	* gcc.target/i386/pr91188-1a.c: New test.
+	* gcc.target/i386/pr91188-1b.c: Ditto.
+	* gcc.target/i386/pr91188-1c.c: Ditto.
+	* gcc.target/i386/pr91188-2a.c: Ditto.
+	* gcc.target/i386/pr91188-2b.c: Ditto.
+	* gcc.target/i386/pr91188-2c.c: Ditto.
+
+2019-07-18  Sylvia Taylor  <sylvia.taylor@arm.com>
+
+        PR target/90317
+        * gcc.target/arm/crypto-vsha1cq_u32.c (foo): Change return type to
+        uint32_t.
+        (GET_LANE, TEST_SHA1C_VEC_SELECT): New.
+        * gcc.target/arm/crypto-vsha1h_u32.c (foo): Change return type to
+        uint32_t.
+        (GET_LANE, TEST_SHA1H_VEC_SELECT): New.
+        * gcc.target/arm/crypto-vsha1mq_u32.c (foo): Change return type to
+        uint32_t.
+        (GET_LANE, TEST_SHA1M_VEC_SELECT): New.
+        * gcc.target/arm/crypto-vsha1pq_u32.c (foo): Change return type to
+        uint32_t.
+        (GET_LANE, TEST_SHA1P_VEC_SELECT): New.
+
+2019-07-18  Jan Hubicka  <hubicka@ucw.cz>
+
+	* g++.dg/lto/alias-5_0.C: New testcase.
+	* g++.dg/lto/alias-5_1.C: New.
+	* g++.dg/lto/alias-5_2.c: New.
+
+2019-07-18  Bin Cheng  <bin.linux@linux.alibaba.com>
+
+	PR tree-optimization/91137
+	* gcc.c-torture/execute/pr91137.c: New test.
+
+2019-07-18  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* c-c++-common/pr53633-2.c: New test.
+
 2019-07-17  Alexandre Oliva <oliva@adacore.com>
 
 	PR middle-end/81824
