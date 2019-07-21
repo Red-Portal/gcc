@@ -38,7 +38,7 @@
 
 #ifndef _LIBGOMP_CHECKING_
 /* Define to 1 to perform internal sanity checks.  */
-#define _LIBGOMP_CHECKING_ 1
+#define _LIBGOMP_CHECKING_ 0
 #endif
 
 #include "config.h"
