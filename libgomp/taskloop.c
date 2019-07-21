@@ -248,13 +248,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    if (i == nfirst)
 	      task_step -= step;
 	    fn (data);
-	    /* if (!priority_queue_empty_p (&task.children_queue, */
-	    /* 				 MEMMODEL_RELAXED)) */
-	    /*   { */
-	    /* 	gomp_mutex_lock (&team->task_lock); */
-	    /* 	gomp_clear_parent (&task.children_queue); */
-	    /* 	gomp_mutex_unlock (&team->task_lock); */
-	    /*   } */
 	    gomp_end_task ();
 	  }
     }
@@ -330,6 +323,7 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       if (taskgroup)
 	taskgroup->num_children += num_tasks;
       parent->num_children += num_tasks;
+      team->task_count += num_tasks;
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
@@ -337,10 +331,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 				 PRIORITY_INSERT_END,
 				 /*last_parent_depends_on=*/false,
 				 task->parent_depends_on);
-	  ++parent->queued_children;
-	  if(taskgroup)
-	      ++taskgroup->queued_children;
-	  ++team->task_count;
 	  ++team->task_queued_count;
 	}
       gomp_team_barrier_set_task_pending (&team->barrier);

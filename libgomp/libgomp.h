@@ -405,7 +405,11 @@ enum gomp_task_kind
      but not yet completed.  Once that completes, they will be readded
      into the queues as GOMP_TASK_WAITING in order to perform the var
      unmapping.  */
-  GOMP_TASK_ASYNC_RUNNING
+  GOMP_TASK_ASYNC_RUNNING,
+
+  /* The task is left only for dependency tracking purpose
+     and is ready to be freed anytime. */
+  GOMP_DONE
 };
 
 struct gomp_task_depend_entry
@@ -463,7 +467,6 @@ struct gomp_task
 
   /* Number of childrens created and queued from this task. */
   size_t num_children;
-  size_t queued_children;
 
   /* Priority of this task.  */
   int priority;
@@ -502,7 +505,6 @@ struct gomp_taskgroup
   bool workshare;
   gomp_sem_t taskgroup_sem;
   size_t num_children;
-  size_t queued_children;
 };
 
 /* Various state of OpenMP async offloading tasks.  */
