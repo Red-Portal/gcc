@@ -81,7 +81,6 @@ gomp_init_task (struct gomp_task *task, struct gomp_task *parent_task,
   task->final_task = false;
   task->copy_ctors_done = false;
   task->parent_depends_on = false;
-  // priority_queue_init (&task->children_queue);
   task->taskgroup = NULL;
   task->dependers = NULL;
   task->depend_hash = NULL;
@@ -128,8 +127,8 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
     }
   else
     {
-      ndepend = (uintptr_t) depend[1];		     /* total # */
-      size_t nout = (uintptr_t) depend[2];	   /* # of out: and inout: */
+      ndepend = (uintptr_t) depend[1];	/* total # */
+      size_t nout = (uintptr_t) depend[2]; /* # of out: and inout: */
       size_t nmutexinoutset = (uintptr_t) depend[3]; /* # of mutexinoutset: */
       /* For now we treat mutexinoutset like out, which is compliant, but
 	 inefficient.  */
@@ -181,8 +180,8 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
       task->depend[i].redundant = false;
       task->depend[i].redundant_out = false;
 
-      hash_entry_type *slot
-	= htab_find_slot (&parent->depend_hash, &task->depend[i], INSERT);
+      hash_entry_type *slot = htab_find_slot (&parent->depend_hash,
+			   &task->depend[i], INSERT);
       hash_entry_type out = NULL, last = NULL;
       if (*slot)
 	{
@@ -228,12 +227,13 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
 		continue;
 	      else if (tsk->dependers->n_elem == tsk->dependers->allocated)
 		{
-		  tsk->dependers->allocated = tsk->dependers->allocated * 2 + 2;
+		  tsk->dependers->allocated
+		    = tsk->dependers->allocated * 2 + 2;
 		  tsk->dependers
 		    = gomp_realloc (tsk->dependers,
 				    sizeof (struct gomp_dependers_vec)
-				      + (tsk->dependers->allocated
-					 * sizeof (struct gomp_task *)));
+				    + (tsk->dependers->allocated
+				       * sizeof (struct gomp_task *)));
 		}
 	      tsk->dependers->elem[tsk->dependers->n_elem++] = task;
 	      task->num_dependees++;
@@ -316,7 +316,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	{
 	  if (thr->task->taskgroup->cancelled)
 	    return;
-	  if (thr->task->taskgroup->workshare && thr->task->taskgroup->prev
+	  if (thr->task->taskgroup->workshare
+	      && thr->task->taskgroup->prev
 	      && thr->task->taskgroup->prev->cancelled)
 	    return;
 	}
@@ -327,7 +328,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
   else if (priority > gomp_max_task_priority_var)
     priority = gomp_max_task_priority_var;
 
-  if (!if_clause || team == NULL || (thr->task && thr->task->final_task)
+  if (!if_clause || team == NULL
+      || (thr->task && thr->task->final_task)
       || team->task_count > 64 * team->nthreads)
     {
       struct gomp_task task;
@@ -338,7 +340,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	 depend clauses for non-deferred tasks other than this, because
 	 the parent task is suspended until the child task finishes and thus
 	 it can't start further child tasks.  */
-      if ((flags & GOMP_TASK_FLAG_DEPEND) && thr->task
+      if ((flags & GOMP_TASK_FLAG_DEPEND)
+	  && thr->task
 	  && thr->task->depend_hash)
 	gomp_task_maybe_wait_for_dependencies (depend);
 
@@ -386,8 +389,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       if (flags & GOMP_TASK_FLAG_DEPEND)
 	depend_size = ((uintptr_t) (depend[0] ? depend[0] : depend[1])
 		       * sizeof (struct gomp_task_depend_entry));
-      task
-	= gomp_malloc (sizeof (*task) + depend_size + arg_size + arg_align - 1);
+      task = gomp_malloc (sizeof (*task) + depend_size
+			  + arg_size + arg_align - 1);
       arg = (char *) (((uintptr_t) (task + 1) + depend_size + arg_align - 1)
 		      & ~(uintptr_t) (arg_align - 1));
       gomp_init_task (task, parent, gomp_icv (false));
@@ -411,7 +414,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       gomp_mutex_lock (&team->task_lock);
       /* If parallel or taskgroup has been cancelled, don't start new
 	 tasks.  */
-      if (__builtin_expect (gomp_cancel_var, 0) && !task->copy_ctors_done)
+      if (__builtin_expect (gomp_cancel_var, 0)
+	  && !task->copy_ctors_done)
 	{
 	  if (gomp_team_barrier_cancelled (&team->barrier))
 	    {
@@ -467,8 +471,9 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
     }
 }
 
-ialias (GOMP_taskgroup_start) ialias (GOMP_taskgroup_end)
-  ialias (GOMP_taskgroup_reduction_register)
+ialias (GOMP_taskgroup_start)
+ialias (GOMP_taskgroup_end)
+ialias (GOMP_taskgroup_reduction_register)
 
 #define TYPE long
 #define UTYPE unsigned long
@@ -485,30 +490,6 @@ ialias (GOMP_taskgroup_start) ialias (GOMP_taskgroup_end)
 #undef TYPE
 #undef UTYPE
 #undef GOMP_taskloop
-
-    static void inline priority_queue_move_task_first (
-      enum priority_queue_type type, struct priority_queue *head,
-      struct gomp_task *task)
-{
-#if _LIBGOMP_CHECKING_
-  if (!priority_queue_task_in_queue_p (type, head, task))
-    gomp_fatal ("Attempt to move first missing task %p", task);
-#endif
-  struct priority_list *list;
-  if (priority_queue_multi_p (head))
-    {
-      list = priority_queue_lookup_priority (head, task->priority);
-#if _LIBGOMP_CHECKING_
-      if (!list)
-	gomp_fatal ("Unable to find priority %d", task->priority);
-#endif
-    }
-  else
-    list = &head->l;
-  priority_list_remove (list, task_to_priority_node (type, task), 0);
-  priority_list_insert (type, list, task, task->priority, PRIORITY_INSERT_BEGIN,
-			type == PQ_CHILDREN, task->parent_depends_on);
-}
 
 /* Actual body of GOMP_PLUGIN_target_task_completion that is executed
    with team->task_lock held, or is executed in the thread that called
@@ -608,7 +589,8 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
 	{
 	  if (thr->task->taskgroup->cancelled)
 	    return true;
-	  if (thr->task->taskgroup->workshare && thr->task->taskgroup->prev
+	  if (thr->task->taskgroup->workshare
+	      && thr->task->taskgroup->prev
 	      && thr->task->taskgroup->prev->cancelled)
 	    return true;
 	}
@@ -648,10 +630,11 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
 	tgt_size = 0;
     }
 
-  task = gomp_malloc (
-    sizeof (*task) + depend_size + sizeof (*ttask)
-    + mapnum * (sizeof (void *) + sizeof (size_t) + sizeof (unsigned short))
-    + tgt_size);
+  task = gomp_malloc (sizeof (*task) + depend_size
+		      + sizeof (*ttask)
+		      + mapnum * (sizeof (void *) + sizeof (size_t)
+				  + sizeof (unsigned short))
+		      + tgt_size);
   gomp_init_task (task, parent, gomp_icv (false));
   task->priority = 0;
   task->kind = GOMP_TASK_WAITING;
@@ -990,7 +973,8 @@ gomp_task_run_post_remove_parent (struct gomp_task *child_task)
      synchronize with gomp_task_maybe_wait_for_dependencies so it can
      clean up and return.  */
   if (__builtin_expect (child_task->parent_depends_on, 0)
-      && --parent->taskwait->n_depend == 0 && parent->taskwait->in_depend_wait)
+      && --parent->taskwait->n_depend == 0
+      && parent->taskwait->in_depend_wait)
     {
       parent->taskwait->in_depend_wait = false;
       gomp_sem_post (&parent->taskwait->taskwait_sem);
@@ -1334,7 +1318,8 @@ GOMP_taskwait_depend (void **depend)
 	{
 	  if (thr->task->taskgroup->cancelled)
 	    return;
-	  if (thr->task->taskgroup->workshare && thr->task->taskgroup->prev
+	  if (thr->task->taskgroup->workshare
+	      && thr->task->taskgroup->prev
 	      && thr->task->taskgroup->prev->cancelled)
 	    return;
 	}
@@ -1414,9 +1399,9 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 	      {
 		tsk->parent_depends_on = true;
 		++num_awaited;
-		/*  Previously, the dependencies were upgraded their priorities.
-		    I'm not sure if not upgrading the depedencies will not lead
-		    to a possible deadlock in a single queue situation. */
+		/* Previously, the dependencies were upgraded their priorities.
+		   Not sure if not upgrading the depedencies will not lead
+		   to a possible deadlock in a single queue situation. */
 	      }
 	  }
     }
@@ -1539,7 +1524,7 @@ GOMP_taskgroup_end (void)
 	}
     }
 
-finish:
+ finish:
   task->taskgroup = taskgroup->prev;
   gomp_sem_destroy (&taskgroup->taskgroup_sem);
   free (taskgroup);
@@ -1618,7 +1603,7 @@ gomp_reduction_register (uintptr_t *data, uintptr_t *old, uintptr_t *orig,
 	     to hash also on the first sizeof (uintptr_t) bytes which contain
 	     a pointer.  Hide the cast from the compiler.  */
 	  hash_entry_type n;
-	  __asm("" : "=g"(n) : "0"(p));
+	  __asm ("" : "=g" (n) : "0" (p));
 	  *htab_find_slot (&new_htab, n, INSERT) = n;
 	}
       if (d[4] == (uintptr_t) old)
@@ -1715,11 +1700,11 @@ GOMP_taskgroup_reduction_unregister (uintptr_t *data)
 }
 ialias (GOMP_taskgroup_reduction_unregister)
 
-  /* For i = 0 to cnt-1, remap ptrs[i] which is either address of the
-     original list item or address of previously remapped original list
-     item to address of the private copy, store that to ptrs[i].
-     For i < cntorig, additionally set ptrs[cnt+i] to the address of
-     the original list item.  */
+/* For i = 0 to cnt-1, remap ptrs[i] which is either address of the
+  original list item or address of previously remapped original list
+  item to address of the private copy, store that to ptrs[i].
+  For i < cntorig, additionally set ptrs[cnt+i] to the address of
+  the original list item.  */
 
   void GOMP_task_reduction_remap (size_t cnt, size_t cntorig, void **ptrs)
 {
@@ -1782,8 +1767,7 @@ ialias (GOMP_taskgroup_reduction_unregister)
 	    }
 	  if (lo > hi)
 	    gomp_fatal ("couldn't find matching task_reduction or reduction "
-			"with task modifier for %p",
-			ptrs[i]);
+			"with task modifier for %p", ptrs[i]);
 	}
     }
 }
