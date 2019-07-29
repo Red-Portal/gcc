@@ -366,15 +366,6 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	}
       else
 	fn (data);
-      /* Access to "children" is normally done inside a task_lock
-	 mutex region, but the only way this particular task.children
-	 can be set is if this thread's task work function (fn)
-	 creates children.  So since the setter is *this* thread, we
-	 need no barriers here when testing for non-NULL.  We can have
-	 task.children set by the current thread then changed by a
-	 child thread, but seeing a stale non-NULL value is not a
-	 problem.  Once past the task_lock acquisition, this thread
-	 will see the real value of task.children.  */
       gomp_end_task ();
     }
   else
@@ -506,24 +497,21 @@ gomp_target_task_completion (struct gomp_team *team, struct gomp_task *task)
 			 PRIORITY_INSERT_BEGIN, false,
 			 task->parent_depends_on);
   task->kind = GOMP_TASK_WAITING;
-  if (parent)
+  if (parent && parent->taskwait)
     {
-      if (parent->taskwait)
+      if (parent->taskwait->in_taskwait)
 	{
-	  if (parent->taskwait->in_taskwait)
-	    {
-	      /* One more task has had its dependencies met.
-		 Inform any waiters.  */
-	      parent->taskwait->in_taskwait = false;
-	      gomp_sem_post (&parent->taskwait->taskwait_sem);
-	    }
-	  else if (parent->taskwait->in_depend_wait)
-	    {
-	      /* One more task has had its dependencies met.
-		 Inform any waiters.  */
-	      parent->taskwait->in_depend_wait = false;
-	      gomp_sem_post (&parent->taskwait->taskwait_sem);
-	    }
+	  /* One more task has had its dependencies met.
+	     Inform any waiters.  */
+	  parent->taskwait->in_taskwait = false;
+	  gomp_sem_post (&parent->taskwait->taskwait_sem);
+	}
+      else if (parent->taskwait->in_depend_wait)
+	{
+	  /* One more task has had its dependencies met.
+	     Inform any waiters.  */
+	  parent->taskwait->in_depend_wait = false;
+	  gomp_sem_post (&parent->taskwait->taskwait_sem);
 	}
     }
   if (taskgroup)

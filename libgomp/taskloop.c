@@ -327,8 +327,7 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	  ++team->task_queued_count;
 	}
       gomp_team_barrier_set_task_pending (&team->barrier);
-      if (team->task_running_count + !parent->in_tied_task
-	  < team->nthreads)
+      if (team->task_running_count + !parent->in_tied_task < team->nthreads)
 	{
 	  do_wake = team->nthreads - team->task_running_count
 		    - !parent->in_tied_task;
