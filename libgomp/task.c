@@ -503,7 +503,8 @@ gomp_target_task_completion (struct gomp_team *team, struct gomp_task *task)
   struct gomp_task *parent = task->parent;
   struct gomp_taskgroup *taskgroup = task->taskgroup;
   priority_queue_insert (PQ_TEAM, &team->task_queue, task, task->priority,
-			 PRIORITY_INSERT_BEGIN, false, task->parent_depends_on);
+			 PRIORITY_INSERT_BEGIN, false,
+			 task->parent_depends_on);
   task->kind = GOMP_TASK_WAITING;
   if (parent)
     {
@@ -789,7 +790,8 @@ gomp_task_run_pre (struct gomp_task *task, struct gomp_team *team)
 	{
 	  if (taskgroup->cancelled)
 	    return true;
-	  if (taskgroup->workshare && taskgroup->prev
+	  if (taskgroup->workshare
+	      && taskgroup->prev
 	      && taskgroup->prev->cancelled)
 	    return true;
 	}
@@ -1057,7 +1059,7 @@ gomp_execute_task (struct gomp_team *team, struct gomp_thread *thr,
   gomp_mutex_lock (&team->task_lock);
   if (next_task)
     {
-    finish_cancelled:;
+     finish_cancelled:;
       size_t new_tasks = gomp_task_run_post_handle_depend (next_task, team);
 
       gomp_task_run_post_remove_parent (next_task);
@@ -1658,7 +1660,8 @@ ialias (GOMP_taskgroup_reduction_unregister)
    For i < cntorig, additionally set ptrs[cnt+i] to the address of
    the original list item.  */
 
-  void GOMP_task_reduction_remap (size_t cnt, size_t cntorig, void **ptrs)
+void
+GOMP_task_reduction_remap (size_t cnt, size_t cntorig, void **ptrs)
 {
   struct gomp_thread *thr = gomp_thread ();
   struct gomp_task *task = thr->task;
