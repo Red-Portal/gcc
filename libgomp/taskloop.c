@@ -216,13 +216,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		task_step -= step;
 	      fn (arg);
 	      arg += arg_size;
-	      /* if (!priority_queue_empty_p (&task[i].children_queue, */
-	      /* 				   MEMMODEL_RELAXED)) */
-	      /* 	{ */
-	      /* 	  gomp_mutex_lock (&team->task_lock); */
-	      /* 	  gomp_clear_parent (&task[i].children_queue); */
-	      /* 	  gomp_mutex_unlock (&team->task_lock); */
-	      /* 	} */
 	      gomp_end_task ();
 	    }
 	}
