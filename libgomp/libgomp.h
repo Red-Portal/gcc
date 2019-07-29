@@ -450,8 +450,6 @@ struct gomp_task
 {
   /* Parent of this task.  */
   struct gomp_task *parent;
-  /* Children of this task.  */
-  /* struct priority_queue children_queue; */
   /* Taskgroup this task belongs in.  */
   struct gomp_taskgroup *taskgroup;
   /* Tasks that depend on this task.  */
@@ -470,10 +468,7 @@ struct gomp_task
 
   /* Priority of this task.  */
   int priority;
-  /* The priority node for this task in each of the different queues.
-     We put this here to avoid allocating space for each priority
-     node.  Then we play offsetof() games to convert between pnode[]
-     entries and the gomp_task in which they reside.  */
+  /* The priority node for this task */
   struct priority_node pnode;
 
   struct gomp_task_icv icv;
@@ -497,8 +492,6 @@ struct gomp_task
 struct gomp_taskgroup
 {
   struct gomp_taskgroup *prev;
-  /* Queue of tasks that belong in this taskgroup.  */
-  /* struct priority_queue taskgroup_queue; */
   uintptr_t *reductions;
   bool in_taskgroup_wait;
   bool cancelled;

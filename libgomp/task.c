@@ -127,7 +127,7 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
     }
   else
     {
-      ndepend = (uintptr_t) depend[1];	/* total # */
+      ndepend = (uintptr_t) depend[1]; /* total # */
       size_t nout = (uintptr_t) depend[2]; /* # of out: and inout: */
       size_t nmutexinoutset = (uintptr_t) depend[3]; /* # of mutexinoutset: */
       /* For now we treat mutexinoutset like out, which is compliant, but
@@ -181,7 +181,7 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
       task->depend[i].redundant_out = false;
 
       hash_entry_type *slot = htab_find_slot (&parent->depend_hash,
-			   &task->depend[i], INSERT);
+					      &task->depend[i], INSERT);
       hash_entry_type out = NULL, last = NULL;
       if (*slot)
 	{
@@ -429,7 +429,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    {
 	      if (taskgroup->cancelled)
 		goto do_cancel;
-	      if (taskgroup->workshare && taskgroup->prev
+	      if (taskgroup->workshare
+		  && taskgroup->prev
 		  && taskgroup->prev->cancelled)
 		goto do_cancel;
 	    }
@@ -463,8 +464,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 			     task->parent_depends_on);
       ++team->task_queued_count;
       gomp_team_barrier_set_task_pending (&team->barrier);
-      do_wake
-	= team->task_running_count + !parent->in_tied_task < team->nthreads;
+      do_wake = team->task_running_count + !parent->in_tied_task
+	  < team->nthreads;
       gomp_mutex_unlock (&team->task_lock);
       if (do_wake)
 	gomp_team_barrier_wake (&team->barrier, 1);
@@ -691,7 +692,8 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
 	{
 	  if (taskgroup->cancelled)
 	    goto do_cancel;
-	  if (taskgroup->workshare && taskgroup->prev
+	  if (taskgroup->workshare
+	      && taskgroup->prev
 	      && taskgroup->prev->cancelled)
 	    goto do_cancel;
 	}
@@ -762,55 +764,6 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
   if (do_wake)
     gomp_team_barrier_wake (&team->barrier, 1);
   return true;
-}
-
-/* Given a parent_depends_on task in LIST, move it to the front of its
-   priority so it is run as soon as possible.
-
-   Care is taken to update the list's LAST_PARENT_DEPENDS_ON field.
-
-   We rearrange the queue such that all parent_depends_on tasks are
-   first, and last_parent_depends_on points to the last such task we
-   rearranged.  For example, given the following tasks in a queue
-   where PD[123] are the parent_depends_on tasks:
-
-	task->children
-	|
-	V
-	C1 -> C2 -> C3 -> PD1 -> PD2 -> PD3 -> C4
-
-	We rearrange such that:
-
-	task->children
-	|	       +--- last_parent_depends_on
-	|	       |
-	V	       V
-	PD1 -> PD2 -> PD3 -> C1 -> C2 -> C3 -> C4.  */
-
-static void inline priority_list_upgrade_task (struct priority_list *list,
-					       struct priority_node *node)
-{
-  struct priority_node *last_parent_depends_on = list->last_parent_depends_on;
-  if (last_parent_depends_on)
-    {
-      node->prev->next = node->next;
-      node->next->prev = node->prev;
-      node->prev = last_parent_depends_on;
-      node->next = last_parent_depends_on->next;
-      node->prev->next = node;
-      node->next->prev = node;
-    }
-  else if (node != list->tasks)
-    {
-      node->prev->next = node->next;
-      node->next->prev = node->prev;
-      node->prev = list->tasks->prev;
-      node->next = list->tasks;
-      list->tasks = node;
-      node->prev->next = node;
-      node->next->prev = node;
-    }
-  list->last_parent_depends_on = node;
 }
 
 static inline bool
@@ -1450,7 +1403,6 @@ gomp_taskgroup_init (struct gomp_taskgroup *prev)
   struct gomp_taskgroup *taskgroup
     = gomp_malloc (sizeof (struct gomp_taskgroup));
   taskgroup->prev = prev;
-  // priority_queue_init (&taskgroup->taskgroup_queue);
   taskgroup->reductions = prev ? prev->reductions : NULL;
   taskgroup->in_taskgroup_wait = false;
   taskgroup->cancelled = false;
@@ -1530,7 +1482,7 @@ GOMP_taskgroup_end (void)
   free (taskgroup);
 }
 
-static inline __attribute__ ((always_inline)) void
+static inline __attribute__((always_inline)) void
 gomp_reduction_register (uintptr_t *data, uintptr_t *old, uintptr_t *orig,
 			 unsigned nthreads)
 {
@@ -1701,10 +1653,10 @@ GOMP_taskgroup_reduction_unregister (uintptr_t *data)
 ialias (GOMP_taskgroup_reduction_unregister)
 
 /* For i = 0 to cnt-1, remap ptrs[i] which is either address of the
-  original list item or address of previously remapped original list
-  item to address of the private copy, store that to ptrs[i].
-  For i < cntorig, additionally set ptrs[cnt+i] to the address of
-  the original list item.  */
+   original list item or address of previously remapped original list
+   item to address of the private copy, store that to ptrs[i].
+   For i < cntorig, additionally set ptrs[cnt+i] to the address of
+   the original list item.  */
 
   void GOMP_task_reduction_remap (size_t cnt, size_t cntorig, void **ptrs)
 {
@@ -1718,12 +1670,12 @@ ialias (GOMP_taskgroup_reduction_unregister)
   for (i = 0; i < cnt; ++i)
     {
       hash_entry_type ent, n;
-      __asm("" : "=g"(ent) : "0"(ptrs + i));
+      __asm ("" : "=g" (ent) : "0" (ptrs + i));
       n = htab_find (reduction_htab, ent);
       if (n)
 	{
 	  uintptr_t *p;
-	  __asm("" : "=g"(p) : "0"(n));
+	  __asm ("" : "=g" (p) : "0" (n));
 	  /* At this point, p[0] should be equal to (uintptr_t) ptrs[i],
 	     p[1] is the offset within the allocated chunk for each
 	     thread, p[2] is the array registered with
@@ -1745,8 +1697,7 @@ ialias (GOMP_taskgroup_reduction_unregister)
 	}
       if (d == NULL)
 	gomp_fatal ("couldn't find matching task_reduction or reduction with "
-		    "task modifier for %p",
-		    ptrs[i]);
+		    "task modifier for %p", ptrs[i]);
       uintptr_t off = ((uintptr_t) ptrs[i] - d[2]) % d[1];
       ptrs[i] = (void *) (d[2] + id * d[1] + off);
       if (__builtin_expect (i < cntorig, 0))
