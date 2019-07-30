@@ -1,3 +1,38 @@
+2019-07-30  Martin Liska  <mliska@suse.cz>
+
+	PR tree-optimization/91270
+	* g++.dg/torture/pr91270.C: New test.
+
+2019-07-30  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.dg/vect/vect-cond-arith-7.c: New test.
+
+2019-07-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/91282
+	* gcc.dg/type-convert-var.c: Add -fexcess-precision=fast to
+	dg-additional-options.
+
+	PR middle-end/91216
+	* gcc.dg/gomp/pr91216.c: New test.
+
+	PR target/91150
+	* gcc.target/i386/avx512bw-pr91150.c: New test.
+
+2019-07-29  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	* gcc.target/msp430/pr78818-data-region.c: Add -mlarge to dg-options.
+	* gcc.target/msp430/region-misuse-code.c: New test.
+	* gcc.target/msp430/region-misuse-data.c: Likewise.
+	* gcc.target/msp430/region-misuse-code-data.c: Likewise.
+	* gcc.target/msp430/region-attribute-misuse.c: Likewise.
+
+2019-07-29  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	PR target/70320
+	* gcc.target/msp430/asm-register-names-lower-case.c: New test.
+	* gcc.target/msp430/asm-register-names-upper-case.c: Likewise.
+
 2019-07-29  Martin Liska  <mliska@suse.cz>
 
 	* g++.dg/cpp1y/new1.C (test_unused): Add new case that causes

@@ -1,3 +1,102 @@
+2019-07-30  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* tree-ssa-math-opts.c (convert_mult_to_fma): Add a mul_cond
+	parameter.  When nonnull, make sure that the addition or subtraction
+	has the same condition.
+	(math_opts_dom_walker::after_dom_children): Try convert_mult_to_fma
+	for CFN_COND_MUL too.
+
+2019-07-30  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91291
+	* tree-ssa-sccvn.c (rpo_elim::eliminate_push_avail): Ignore
+	constant values.
+
+2019-07-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/91216
+	* omp-low.c (global_nonaddressable_vars): New variable.
+	(use_pointer_for_field): For global decls, if they are non-addressable,
+	remember it in the global_nonaddressable_vars bitmap, if they are
+	addressable and in the global_nonaddressable_vars bitmap, ignore their
+	TREE_ADDRESSABLE bit.
+	(omp_copy_decl_2): Clear TREE_ADDRESSABLE also on private copies of
+	vars in global_nonaddressable_vars bitmap.
+	(execute_lower_omp): Free global_nonaddressable_vars bitmap.
+
+	PR target/91150
+	* config/i386/i386-expand.c (expand_vec_perm_blend): Change mask type
+	from unsigned to unsigned HOST_WIDE_INT.  For E_V64QImode cast
+	comparison to unsigned HOST_WIDE_INT before shifting it left.
+
+2019-07-30  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/i386.md (movstrict<mode>): Use register_operand
+	predicate for operand 0.  Add expander condition.  Assert that
+	operand 0 is a SUBREG RTX.
+	(*movstrict<mode>_1): Use register_operand predicate for operand 0.
+	Update operand constraints and insn condition.
+	(zero_extend<mode>si2_and): Do not call gen_movstrict<mode>.
+	(zero_extendqihi2_and): Do not call gen_movstrictqi.
+	(*setcc_qi_slp): Use register_operand predicate for operand 0.
+	Update operand 0 constraints.
+	(setcc_qi_slp splitters): Use register_operand predicate for operand 0.
+
+2019-07-29  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	* config/msp430/msp430.h (DRIVER_SELF_SPECS): Define and emit errors
+	when -m{code,data}-region are used without -mlarge.
+	* config/msp430/msp430.c (msp430_option_override): Error when a
+	non-default code or data region is used without -mlarge.
+	(msp430_section_attr): Emit a warning and do not add upper/lower/either
+	attributes when they are used without -mlarge.
+
+2019-07-29  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	PR target/70320
+	* config/msp430/msp430.h: Define ADDITIONAL_REGISTER_NAMES.
+
+2019-07-29  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR middle-end/91242
+	* wide-int.h (generic_wide_int::sext_elt): New function.
+	* inchash.h (hash::add_wide_int): Use it instead of elt.
+
+2019-07-29  Kyrylo Tkachov  <kyrylo.tkachov@arm.com>
+
+	* config/arm/arm-builtins.c (acle_builtin_data): Expand VAR1 to
+	CODE_FOR_arm_##.
+	* config/arm/arm.md (<crc_variant>): Rename to...
+	(arm_<crc_variant>): ... This.
+	(<cdp>): Rename to...
+	(arm_<cdp>): ... This.
+	(<ldc>): Rename to...
+	(arm_<ldc>): ... This.
+	(<stc>): Rename to...
+	(arm_<stc>): ... This.
+	(<mcr>): Rename to...
+	(arm_<mcr>): ... This.
+	(<mrc>): Rename to...
+	(arm_<mrc>): ... This.
+	(<mcrr>): Rename to...
+	(arm_<mcrr>): ... This.
+	(<mrrc>): Rename to...
+	(arm_<mrrc>): ... This.
+
+2019-07-29  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91257
+	* tree-ssa-sccvn.h (struct vn_avail): New.
+	(struct vn_ssa_aux): Add avail member.
+	* tree-ssa-sccvn.c (class rpo_elim): Remove m_rpo_avail
+	member, add m_avail_freelist one.
+	(rpo_elim::~rpo_elim): Remove.
+	(rpo_elim::eliminate_avail): Adjust to new avail tracking
+	data structure.
+	(rpo_elim::eliminate_push_avail): Likewise.
+	(do_unwind): Likewise.
+	(do_rpo_vn): Likewise.
+
 2019-07-29  Richard Biener  <rguenther@suse.de>
 
 	PR tree-optimization/91257
