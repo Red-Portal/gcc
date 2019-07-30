@@ -38,7 +38,7 @@
 
 #ifndef _LIBGOMP_CHECKING_
 /* Define to 1 to perform internal sanity checks.  */
-#define _LIBGOMP_CHECKING_ 0
+#define _LIBGOMP_CHECKING_ 1
 #endif
 
 #include "config.h"
@@ -1203,34 +1203,18 @@ extern int gomp_test_nest_lock_25 (omp_nest_lock_25_t *) __GOMP_NOTHROW;
 #endif
 
 /* Helper function for priority_node_to_task() and
-   task_to_priority_node().
-
-   Return the offset from a task to its priority_node entry.  The
-   priority_node entry is has a type of TYPE.  */
-
-static inline size_t
-priority_queue_offset (enum priority_queue_type type)
-{
-  return offsetof (struct gomp_task, pnode);
-}
-
-/* Return the task associated with a priority NODE of type TYPE.  */
+   task_to_priority_node(). */
 
 static inline struct gomp_task *
-priority_node_to_task (enum priority_queue_type type,
-		       struct priority_node *node)
+priority_node_to_task (struct priority_node *node)
 {
-  return (struct gomp_task *) ((char *) node - priority_queue_offset (type));
+  return (struct gomp_task *) ((char *) node);
 }
 
-/* Return the priority node of type TYPE for a given TASK.  */
-
 static inline struct priority_node *
-task_to_priority_node (enum priority_queue_type type,
-		       struct gomp_task *task)
+task_to_priority_node (struct gomp_task *task)
 {
-  return (struct priority_node *) ((char *) task
-				   + priority_queue_offset (type));
+  return (struct priority_node *) ((char *) task);
 }
 
 #ifdef LIBGOMP_USE_PTHREADS

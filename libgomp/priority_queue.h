@@ -102,34 +102,14 @@ enum priority_insert_type {
   PRIORITY_INSERT_END
 };
 
-/* Used to determine in which queue a given priority node belongs in.
-   See pnode field of gomp_task.  */
-
-enum priority_queue_type
-{
-  PQ_TEAM,	    /* Node belongs in gomp_team's task_queue.  */
-  PQ_CHILDREN,	    /* Node belongs in parent's children_queue.  */
-  PQ_TASKGROUP,	    /* Node belongs in taskgroup->taskgroup_queue.  */
-  PQ_IGNORED = 999
-};
-
 /* Priority queue implementation prototypes.  */
-
-extern bool priority_queue_task_in_queue_p (enum priority_queue_type,
-					    struct priority_queue *,
+extern bool priority_queue_task_in_queue_p (struct priority_queue *,
 					    struct gomp_task *);
-extern void priority_queue_dump (enum priority_queue_type,
-				 struct priority_queue *);
-extern void priority_queue_verify (enum priority_queue_type,
-				   struct priority_queue *, bool);
-extern void priority_tree_remove (enum priority_queue_type,
-				  struct priority_queue *,
+extern void priority_queue_dump (struct priority_queue *);
+extern void priority_queue_verify (struct priority_queue *, bool);
+extern void priority_tree_remove (struct priority_queue *,
 				  struct priority_node *);
-extern struct gomp_task *priority_tree_next_task (enum priority_queue_type,
-						  struct priority_queue *,
-						  enum priority_queue_type,
-						  struct priority_queue *,
-						  bool *);
+extern struct gomp_task *priority_tree_next_task (struct priority_queue *);
 
 /* Return TRUE if there is more than one priority in HEAD.  This is
    used throughout to to choose between the fast path (priority 0 only
@@ -165,13 +145,10 @@ priority_queue_free (struct priority_queue *head)
 }
 
 /* Forward declarations.  */
-static inline size_t priority_queue_offset (enum priority_queue_type);
 static inline struct gomp_task *priority_node_to_task
-				(enum priority_queue_type,
-				 struct priority_node *);
+				(struct priority_node *);
 static inline struct priority_node *task_to_priority_node
-				    (enum priority_queue_type,
-				     struct gomp_task *);
+				    (struct gomp_task *);
 
 /* Return TRUE if priority queue HEAD is empty.
 
@@ -234,15 +211,14 @@ priority_queue_lookup_priority (struct priority_queue *head, int priority)
    Return the new priority_node.  */
 
 static inline void
-priority_list_insert (enum priority_queue_type type,
-		      struct priority_list *list,
+priority_list_insert (struct priority_list *list,
 		      struct gomp_task *task,
 		      int priority,
 		      enum priority_insert_type pos,
 		      bool adjust_parent_depends_on,
 		      bool task_is_parent_depends_on)
 {
-  struct priority_node *node = task_to_priority_node (type, task);
+  struct priority_node *node = task_to_priority_node (task);
   if (list->tasks)
     {
       /* If we are keeping track of higher/lower priority items,
@@ -287,8 +263,7 @@ priority_list_insert (enum priority_queue_type type,
 /* Tree version of priority_list_insert.  */
 
 static inline void
-priority_tree_insert (enum priority_queue_type type,
-		      struct priority_queue *head,
+priority_tree_insert (struct priority_queue *head,
 		      struct gomp_task *task,
 		      int priority,
 		      enum priority_insert_type pos,
@@ -324,7 +299,7 @@ priority_tree_insert (enum priority_queue_type type,
       prio_splay_tree_insert (&head->t, k);
       list = &k->key.l;
     }
-  priority_list_insert (type, list, task, priority, pos,
+  priority_list_insert (list, task, priority, pos,
 			adjust_parent_depends_on,
 			task_is_parent_depends_on);
 }
@@ -332,8 +307,7 @@ priority_tree_insert (enum priority_queue_type type,
 /* Generic version of priority_*_insert.  */
 
 static inline void
-priority_queue_insert (enum priority_queue_type type,
-		       struct priority_queue *head,
+priority_queue_insert (struct priority_queue *head,
 		       struct gomp_task *task,
 		       int priority,
 		       enum priority_insert_type pos,
@@ -341,67 +315,41 @@ priority_queue_insert (enum priority_queue_type type,
 		       bool task_is_parent_depends_on)
 {
 #if _LIBGOMP_CHECKING_
-  if (priority_queue_task_in_queue_p (type, head, task))
+  if (priority_queue_task_in_queue_p (head, task))
     gomp_fatal ("Attempt to insert existing task %p", task);
 #endif
   if (priority_queue_multi_p (head) || __builtin_expect (priority > 0, 0))
-    priority_tree_insert (type, head, task, priority, pos,
+    priority_tree_insert (head, task, priority, pos,
 			  adjust_parent_depends_on,
 			  task_is_parent_depends_on);
   else
-    priority_list_insert (type, &head->l, task, priority, pos,
+    priority_list_insert (&head->l, task, priority, pos,
 			  adjust_parent_depends_on,
 			  task_is_parent_depends_on);
 }
 
-/* If multiple priorities are in play, return the highest priority
-   task from within Q1 and Q2, while giving preference to tasks from
-   Q1.  If the returned task is chosen from Q1, *Q1_CHOSEN_P is set to
-   TRUE, otherwise it is set to FALSE.
-
-   If multiple priorities are not in play (only 0 priorities are
-   available), the next task is chosen exclusively from Q1.
-
-   As a special case, Q2 can be NULL, in which case, we just choose
-   the highest priority WAITING task in Q1.  This is an optimization
-   to speed up looking through only one queue.
-
-   We assume Q1 has at least one item.  */
+/* Choose highest priority item in q, which is assumed to be nonempty */
 
 static inline struct gomp_task *
-priority_queue_next_task (enum priority_queue_type t1,
-			  struct priority_queue *q1,
-			  enum priority_queue_type t2,
-			  struct priority_queue *q2,
-			  bool *q1_chosen_p)
+priority_queue_next_task (struct priority_queue *q)
 {
 #if _LIBGOMP_CHECKING_
-  if (priority_queue_empty_p (q1, MEMMODEL_RELAXED))
-    gomp_fatal ("priority_queue_next_task: Q1 is empty");
+  if (priority_queue_empty_p (q, MEMMODEL_RELAXED))
+    gomp_fatal ("priority_queue_next_task: queue is empty");
 #endif
-  if (priority_queue_multi_p (q1))
+  if (priority_queue_multi_p (q))
     {
-      struct gomp_task *t
-	= priority_tree_next_task (t1, q1, t2, q2, q1_chosen_p);
+      struct gomp_task *t = priority_tree_next_task (q);
       /* If T is NULL, there are no WAITING tasks in Q1.  In which
 	 case, return any old (non-waiting) task which will cause the
 	 caller to do the right thing when checking T->KIND ==
 	 GOMP_TASK_WAITING.  */
       if (!t)
-	{
-#if _LIBGOMP_CHECKING_
-	  if (*q1_chosen_p == false)
-	    gomp_fatal ("priority_queue_next_task inconsistency");
-#endif
-	  return priority_node_to_task (t1, q1->t.root->key.l.tasks);
-	}
+	  return priority_node_to_task (q->t.root->key.l.tasks);
       return t;
     }
   else
-    {
-      *q1_chosen_p = true;
-      return priority_node_to_task (t1, q1->l.tasks);
-    }
+      return priority_node_to_task (q->l.tasks);
 }
 
 /* Remove NODE from LIST.
@@ -454,18 +402,17 @@ remove_out:
    If the queue becomes empty after the remove, return TRUE.  */
 
 static inline bool
-priority_queue_remove (enum priority_queue_type type,
-		       struct priority_queue *head,
+priority_queue_remove (struct priority_queue *head,
 		       struct gomp_task *task,
 		       enum memmodel model)
 {
 #if _LIBGOMP_CHECKING_
-  if (!priority_queue_task_in_queue_p (type, head, task))
+  if (!priority_queue_task_in_queue_p (head, task))
     gomp_fatal ("Attempt to remove missing task %p", task);
 #endif
   if (priority_queue_multi_p (head))
     {
-      priority_tree_remove (type, head, task_to_priority_node (type, task));
+      priority_tree_remove (head, task_to_priority_node (task));
       if (head->t.root == NULL)
 	{
 	  if (model == MEMMODEL_RELEASE)
@@ -479,7 +426,7 @@ priority_queue_remove (enum priority_queue_type type,
     }
   else
     return priority_list_remove (&head->l,
-				 task_to_priority_node (type, task), model);
+				 task_to_priority_node (task), model);
 }
 
 #endif /* _PRIORITY_QUEUE_H_ */

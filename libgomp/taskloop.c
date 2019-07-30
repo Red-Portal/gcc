@@ -320,7 +320,7 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
-	  priority_queue_insert (PQ_TEAM, &team->task_queue, task, priority,
+	  priority_queue_insert (&team->task_queue, task, priority,
 				 PRIORITY_INSERT_END,
 				 /*last_parent_depends_on=*/false,
 				 task->parent_depends_on);

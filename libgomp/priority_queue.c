@@ -36,14 +36,13 @@
    TYPE is the type of priority queue this task resides in.  */
 
 static inline bool
-priority_queue_task_in_list_p (enum priority_queue_type type,
-			       struct priority_list *list,
+priority_queue_task_in_list_p (struct priority_list *list,
 			       struct gomp_task *task)
 {
   struct priority_node *p = list->tasks;
   do
     {
-      if (priority_node_to_task (type, p) == task)
+      if (priority_node_to_task (p) == task)
 	return true;
       p = p->next;
     }
@@ -54,31 +53,29 @@ priority_queue_task_in_list_p (enum priority_queue_type type,
 /* Tree version of priority_queue_task_in_list_p.  */
 
 static inline bool
-priority_queue_task_in_tree_p (enum priority_queue_type type,
-			       struct priority_queue *head,
+priority_queue_task_in_tree_p (struct priority_queue *head,
 			       struct gomp_task *task)
 {
   struct priority_list *list
     = priority_queue_lookup_priority (head, task->priority);
   if (!list)
     return false;
-  return priority_queue_task_in_list_p (type, list, task);
+  return priority_queue_task_in_list_p (list, task);
 }
 
 /* Generic version of priority_queue_task_in_list_p that works for
    trees or lists.  */
 
 bool
-priority_queue_task_in_queue_p (enum priority_queue_type type,
-				struct priority_queue *head,
+priority_queue_task_in_queue_p (struct priority_queue *head,
 				struct gomp_task *task)
 {
   if (priority_queue_empty_p (head, MEMMODEL_RELAXED))
     return false;
   if (priority_queue_multi_p (head))
-    return priority_queue_task_in_tree_p (type, head, task);
+    return priority_queue_task_in_tree_p (head, task);
   else
-    return priority_queue_task_in_list_p (type, &head->l, task);
+    return priority_queue_task_in_list_p (&head->l, task);
 }
 
 /* Sanity check LIST to make sure the tasks therein are in the right
@@ -93,15 +90,14 @@ priority_queue_task_in_queue_p (enum priority_queue_type type,
    ensure that we are verifying the children queue.  */
 
 static void
-priority_list_verify (enum priority_queue_type type,
-		      struct priority_list *list, bool check_deps)
+priority_list_verify (struct priority_list *list, bool check_deps)
 {
   bool seen_tied = false;
   bool seen_plain_waiting = false;
   struct priority_node *p = list->tasks;
   while (1)
     {
-      struct gomp_task *t = priority_node_to_task (type, p);
+      struct gomp_task *t = priority_node_to_task (p);
       if (seen_tied && t->kind == GOMP_TASK_WAITING)
 	gomp_fatal ("priority_queue_verify: WAITING task after TIED");
       if (t->kind >= GOMP_TASK_TIED)
@@ -123,13 +119,6 @@ priority_list_verify (enum priority_queue_type type,
     }
 }
 
-/* Callback type for priority_tree_verify_callback.  */
-struct cbtype
-{
-  enum priority_queue_type type;
-  bool check_deps;
-};
-
 /* Verify every task in NODE.
 
    Callback for splay_tree_foreach.  */
@@ -137,8 +126,7 @@ struct cbtype
 static void
 priority_tree_verify_callback (prio_splay_tree_key key, void *data)
 {
-  struct cbtype *cb = (struct cbtype *) data;
-  priority_list_verify (cb->type, &key->l, cb->check_deps);
+  priority_list_verify (&key->l, *(bool *)data);
 }
 
 /* Generic version of priority_list_verify.
@@ -152,19 +140,17 @@ priority_tree_verify_callback (prio_splay_tree_key key, void *data)
    ensure that we are verifying the children queue.  */
 
 void
-priority_queue_verify (enum priority_queue_type type,
-		       struct priority_queue *head, bool check_deps)
+priority_queue_verify (struct priority_queue *head, bool check_deps)
 {
   if (priority_queue_empty_p (head, MEMMODEL_RELAXED))
     return;
   if (priority_queue_multi_p (head))
     {
-      struct cbtype cb = { type, check_deps };
-      prio_splay_tree_foreach (&head->t,
-			       priority_tree_verify_callback, &cb);
+      prio_splay_tree_foreach (&head->t, priority_tree_verify_callback,
+			       &check_deps);
     }
   else
-    priority_list_verify (type, &head->l, check_deps);
+    priority_list_verify (&head->l, check_deps);
 }
 #endif /* _LIBGOMP_CHECKING_ */
 
@@ -172,8 +158,7 @@ priority_queue_verify (enum priority_queue_type type,
    tree.  HEAD contains tasks of type TYPE.  */
 
 void
-priority_tree_remove (enum priority_queue_type type,
-		      struct priority_queue *head,
+priority_tree_remove (struct priority_queue *head,
 		      struct priority_node *node)
 {
   /* ?? The only reason this function is not inlined is because we
@@ -181,7 +166,7 @@ priority_tree_remove (enum priority_queue_type type,
      completely defined in the header file).  If the lack of inlining
      is a concern, we could pass the priority number as a
      parameter, or we could move this to libgomp.h.  */
-  int priority = priority_node_to_task (type, node)->priority;
+  int priority = priority_node_to_task (node)->priority;
 
   /* ?? We could avoid this lookup by keeping a pointer to the key in
      the priority_node.  */
@@ -214,16 +199,15 @@ priority_tree_remove (enum priority_queue_type type,
    in-order.  */
 
 static struct gomp_task *
-priority_tree_next_task_1 (enum priority_queue_type type,
-			   prio_splay_tree_node node)
+priority_tree_next_task_1 (prio_splay_tree_node node)
 {
  again:
   if (!node)
     return NULL;
-  struct gomp_task *ret = priority_tree_next_task_1 (type, node->right);
+  struct gomp_task *ret = priority_tree_next_task_1 (node->right);
   if (ret)
     return ret;
-  ret = priority_node_to_task (type, node->key.l.tasks);
+  ret = priority_node_to_task (node->key.l.tasks);
   if (ret->kind == GOMP_TASK_WAITING)
     return ret;
   node = node->left;
@@ -245,44 +229,9 @@ priority_tree_next_task_1 (enum priority_queue_type type,
    TRUE, otherwise it is set to FALSE.  */
 
 struct gomp_task *
-priority_tree_next_task (enum priority_queue_type type1,
-			 struct priority_queue *q1,
-			 enum priority_queue_type type2,
-			 struct priority_queue *q2,
-			 bool *q1_chosen_p)
+priority_tree_next_task (struct priority_queue *q)
 {
-  struct gomp_task *t1 = priority_tree_next_task_1 (type1, q1->t.root);
-  if (!t1
-      /* Special optimization when only searching through one queue.  */
-      || !q2)
-    {
-      *q1_chosen_p = true;
-      return t1;
-    }
-  struct gomp_task *t2 = priority_tree_next_task_1 (type2, q2->t.root);
-  if (!t2 || t1->priority > t2->priority)
-    {
-      *q1_chosen_p = true;
-      return t1;
-    }
-  if (t2->priority > t1->priority)
-    {
-      *q1_chosen_p = false;
-      return t2;
-    }
-  /* If we get here, the priorities are the same, so we must look at
-     parent_depends_on to make our decision.  */
-#if _LIBGOMP_CHECKING_
-  if (t1 != t2)
-    gomp_fatal ("priority_tree_next_task: t1 != t2");
-#endif
-  if (t2->parent_depends_on && !t1->parent_depends_on)
-    {
-      *q1_chosen_p = false;
-      return t2;
-    }
-  *q1_chosen_p = true;
-  return t1;
+  return priority_tree_next_task_1 (q->t.root);
 }
 
 /* Priority splay trees comparison function.  */
