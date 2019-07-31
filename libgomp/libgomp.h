@@ -1208,13 +1208,15 @@ extern int gomp_test_nest_lock_25 (omp_nest_lock_25_t *) __GOMP_NOTHROW;
 static inline struct gomp_task *
 priority_node_to_task (struct priority_node *node)
 {
-  return (struct gomp_task *) ((char *) node);
+  return (struct gomp_task *)
+      ((char *) node - offsetof (struct gomp_task, pnode));
 }
 
 static inline struct priority_node *
 task_to_priority_node (struct gomp_task *task)
 {
-  return (struct priority_node *) ((char *) task);
+  return (struct priority_node *)
+      ((char *) task + offsetof (struct gomp_task, pnode));
 }
 
 #ifdef LIBGOMP_USE_PTHREADS
