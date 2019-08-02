@@ -1,3 +1,363 @@
+2019-08-02  Alexander Monakov  <amonakov@ispras.ru>
+
+	* tree-ssa-loop-im.c (sort_bbs_in_loop_postorder_cmp): Simplify casts
+	from 'const void *'.
+	(sort_locs_in_loop_postorder_cmp): Likewise.
+
+2019-08-02  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* doc/invoke.texi (hot-bb-count-fraction): Rework description.
+	(hot-bb-count-ws-permille): Likewise.
+	(hot-bb-frequency-fraction): Likewise.
+	(unlikely-bb-count-fraction): Likewise.
+	* params.def (hot-bb-count-fraction): Rework description.
+	(hot-bb-count-ws-permille): Likewise.
+	(hot-bb-frequency-fraction): Likewise.
+	(unlikely-bb-count-fraction): Likewise.  Remove min and max values.
+	* predict.c (get_hot_bb_threshold): Deal with 0 HOT_BB_COUNT_FRACTION.
+
+2019-08-02  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/91323
+	* config/i386/i386-expand.c (ix86_unordered_fp_compare) <case LTGT>:
+	Return false.
+
+2019-08-02  Richard Biener  <rguenther@suse.de>
+
+	* vec.h (vec::sort): Add gcc_qsort_r support.
+	(vec::bsearch): Add an overload with gcc_qsort_r style callbacks.
+	* tree-ssa-loop-im.c (sort_bbs_in_loop_postorder_cmp): Adjust
+	to gcc_qsort_r style callback.
+	(sort_locs_in_loop_postorder_cmp): Likewise.
+	(analyze_memory_references): Use gcc_sort_r interfaces.
+	(find_ref_loc_in_loop_cmp): Use new bsearch overload.
+
+2019-08-02  Martin Liska  <mliska@suse.cz>
+
+	PR lto/91313
+	* gcc.c (driver::maybe_run_linker): Call detect_jobserver
+	to detect working job server.
+	(driver::detect_jobserver): Test whether jobserver
+	is active from GCC driver. That will prevent situation where
+	GCC is invoked from a LD plugin and the linker already uses
+	file descriptors suggested by make.  That leads to a wrong
+	detection.
+	* gcc.h (driver): Add detect_jobserver.
+	* lto-wrapper.c (jobserver_active_p): Simplify sscanf by
+	not scanning for --jobserver-auth prefix.
+
+2019-08-02  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/91201
+	* config/i386/i386-expand.c (ix86_expand_vector_extract): For elt == 0
+	V16QImode extraction without sse4.1 try to use V4SImode lowpart
+	extraction.
+
+2019-08-01  Martin Sebor  <msebor@redhat.com>
+
+	PR c++/90947
+	* tree.c (type_initializer_zero_p): Define.
+	* tree.h (type_initializer_zero_p): New function.
+
+2019-08-01  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* cfgrtl.c (relink_block_chain): Add line returns in dump file.
+
+2019-08-01  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* cgraph.h (cgraph_edge::maybe_hot_p): Tweak comment.
+	* cgraph.c (cgraph_edge::maybe_hot_p): Likewise.  Remove useless test.
+	* predict.c (maybe_hot_count_p): Likewise.
+	(maybe_hot_bb_p): Tweak comment.
+	(maybe_hot_edge_p): Likewise.
+	(probably_never_executed): Likewise.  Minor tweak.
+	(probably_never_executed_bb_p): Likewise.
+	(unlikely_executed_edge_p): Likewise.
+	(probably_never_executed_edge_p): Likewise.
+	(optimize_function_for_size_p): Likewise.
+	(optimize_function_for_speed_p): Likewise.
+	(function_optimization_type): Likewise.
+	(optimize_bb_for_size_p): Likewise.
+	(optimize_bb_for_speed_p): Likewise.
+	(bb_optimization_type): Likewise.
+	(optimize_edge_for_size_p): Likewise.
+	(optimize_edge_for_speed_p): Likewise.
+	(optimize_insn_for_size_p): Likewise.
+	(optimize_insn_for_speed_p): Likewise.
+	(optimize_loop_for_size_p): Likewise.
+	(optimize_loop_for_speed_p): Likewise.
+	(optimize_loop_nest_for_speed_p): Likewise.
+	(optimize_loop_nest_for_size_p): Likewise.
+	(predictable_edge_p): Likewise.
+	(handle_missing_profiles): Minor tweak.
+
+2019-08-01  Michael Meissner  <meissner@linux.ibm.com>
+
+	* config/rs6000/predicates.md (pcrel_external_address): Update
+	comment.
+
+2019-08-01  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/85693
+	* config/i386/mmx.md (usadv8qi): New expander.
+
+2019-08-01  Matthew Beliveau  <mbelivea@redhat.com>
+
+	PR c++/90590
+	* c-warn.c (c_do_switch_warnings): Suppress warning for enumerators
+	with reserved names that are in a system header.
+
+2019-08-01  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/mmx.md (vec_extractv2si_0): Add (r,x) alternative.
+	(*vec_extractv2si_0_zext_sse4): New insn pattern.
+	(*vec_extractv2si_0_zext): Ditto.
+	(*vec_extractv2si_1): Add (rm,x) alternative.
+	(*vec_extractv2si_1_zext): New insn pattern.
+	(*vec_extractv2si_zext_mem): Add "TARGET_MMX || TARGET_MMX_WITH_SSE"
+	insn constraint.
+
+2019-08-01  Richard Biener  <rguenther@suse.de>
+
+	* domwalk.c (bb_postorder): Remove static variable.
+	(cmp_bb_postorder): Adjust.
+	(sort_bbs_postorder): Adjust and use gcc_sort_r.
+	(dom_walker::walk): Adjust.
+
+2019-08-01  Alexander Monakov  <amonakov@ispras.ru>
+
+	* sort.cc (sort_r_ctx): New struct.
+	(reorder23): Make templated on context type.
+	(reorder45): Ditto.
+	(cmp1): Ditto.  Adjust signature.
+	(netsort): Ditto.
+	(mergesort): Ditto.
+	[CHECKING_P] (cmp2to3): New static function.  Use it...
+	(gcc_qsort) [CHECKING_P]: ...here.
+	(gcc_sort_r): New function.
+	* system.h (sort_r_cmp_fn): New function typedef.
+	(qsort_chk): Adjust signature.
+	(gcc_sort_r): Declare.
+	* vec.c (qsort_chk_error): Adjust.
+	(qsort_chk): Adjust.
+
+2019-08-01  Richard Biener  <rguenther@suse.de>
+
+	* tree-ssa-pre.c (has_abnormal_preds): Remove global var.
+	(compute_antic): Localize it here.
+
+2019-07-31  Maxim Blinov  <maxim.blinov@embecosm.com>
+
+	* common/config/riscv/riscv-common.c: Check -march string ends
+	with null.
+
+2019-07-31  Alexander Monakov  <amonakov@ispras.ru>
+
+	* ipa-devirt.c (type_warning_cmp): Make static.
+	(decl_warning_cmp): Ditto.
+
+2019-07-31  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/91050
+	* config/rs6000/rs6000.opt (mdejagnu-cpu=): Delete option.
+	* config/rs6000/rs6000.c (rs6000_option_override_internal): Remove
+	use of deleted rs6000_dejagnu_cpu_index variable.
+	* config/rs6000/rs6000.h (DRIVER_SELF_SPECS): Define.
+	(SUBTARGET_DRIVER_SELF_SPECS): Likewise.
+	* config/darwin.h (DRIVER_SELF_SPECS): Rename from this ...
+	(SUBTARGET_DRIVER_SELF_SPECS): ...to this.
+	* config/i386/i386.h (DRIVER_SELF_SPECS): Define.
+	(SUBTARGET_DRIVER_SELF_SPECS): Likewise.
+
+2019-07-31  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91280
+	* tree-ssa-structalias.c (get_constraint_for_component_ref):
+	Decompose MEM_REF manually for offset handling.
+
+2019-07-31  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91293
+	* tree-vect-slp.c (vect_build_slp_tree_2): Do not swap operands
+	of reduction stmts.
+
+2019-07-31  Matt Thomas  <matt@3am-software.com>
+	    Nick Hudson <nick@nthcliff.demon.co.uk>
+	    Matthew Green <mrg@eterna.com.au>
+	    Maya Rashish <coypu@sdf.org>
+
+	* config.gcc (hppa*-*-netbsd*): New target.
+	* config/pa/pa-netbsd.h: New file.
+	* config/pa/pa32-netbsd.h: New file.
+
+2019-07-31  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/91201
+	* config/i386/mmx.md (reduc_plus_scal_v8qi): New expander.
+
+2019-07-31  Andrew Stubbs  <ams@codesourcery.com>
+
+	* config/gcn/gcn-valu.md
+	(scatter<mode>_insn_1offset<exec_scatter>): Remove s_waitcnt.
+	(scatter<mode>_insn_1offset_ds<exec_scatter>): Likewise.
+	(scatter<mode>_insn_2offsets<exec_scatter>): Likewise.
+	* config/gcn/gcn.c (gcn_md_reorg): Add delayeduse and reads to
+	struct ilist. Add nops for delayeduse insns.
+	* config/gcn/gcn.md (delayeduse): New attribute.
+	(*movbi): Remove s_waitcnt from stores.
+	(*mov<mode>_insn): Likewise.
+	(*movti_insn): Likewise. Add delayeduse attribute.
+	(sync_compare_and_swap<mode>_insn): Add delayeduse attribute.
+	(atomic_store<mode>): Remove or adjust s_waitcnt.
+
+2019-07-31  Richard Biener  <rguenther@suse.de>
+
+	* vr-values.h (vr_values::swap_vr_value): New.
+	(vr_values::free_value_range): likewise.
+	* vr-values.c (vr_values::swap_vr_value): Implement.
+	* gimple-ssa-evrp-analyze.h (evrp_range_analyzer::pop_value_range):
+	Do not return a range or take a var.
+	(evrp_range_analyzer::stack): Change back to recording a non-const
+	value_range *.
+	* gimple-ssa-evrp-analyze.c
+	(evrp_range_analyzer::record_ranges_from_stmt): Free unused
+	value-range.
+	(evrp_range_analyzer::pop_to_marker): Adjust.
+	(evrp_range_analyzer::push_value_range): Use new swap_vr_value.
+	(evrp_range_analyzer::pop_value_range): Likewise.  Free the
+	no longer needed value-range.
+
+2019-07-31  Martin Liska  <mliska@suse.cz>
+
+	* tree-ssa-dce.c (propagate_necessity): Delete operator can
+	have size and (or) alignment as 2nd and later arguments.
+	Mark all of them as necessary.
+
+2019-07-31  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91178
+	* tree-ssa-sccvn.c (vn_reference_maybe_forwprop_address):
+	Use tail-recursion.
+
+2019-07-31  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/91201
+	* config/i386/sse.md (reduc_plus_scal_v16qi): New expander.
+	(REDUC_PLUS_MODE): Add V32QImode for TARGET_AVX and V64QImode for
+	TARGET_AVX512F.
+	(reduc_plus_scal_<mode>): Improve formatting by introducing
+	a temporary.
+
+2019-07-31  Sudakshina Das  <sudi.das@arm.com>
+
+	* config/aarch64/aarch64-builtins.c (enum aarch64_builtins): Add
+	AARCH64_TME_BUILTIN_TSTART, AARCH64_TME_BUILTIN_TCOMMIT,
+	AARCH64_TME_BUILTIN_TTEST and AARCH64_TME_BUILTIN_TCANCEL.
+	(aarch64_init_tme_builtins): New.
+	(aarch64_init_builtins): Call aarch64_init_tme_builtins.
+	(aarch64_expand_builtin_tme): New.
+	(aarch64_expand_builtin): Handle TME builtins.
+	* config/aarch64/aarch64-c.c (aarch64_update_cpp_builtins): Define
+	__ARM_FEATURE_TME when enabled.
+	* config/aarch64/aarch64-option-extensions.def: Add "tme".
+	* config/aarch64/aarch64.h (AARCH64_FL_TME, AARCH64_ISA_TME): New.
+	(TARGET_TME): New.
+	* config/aarch64/aarch64.md (define_c_enum "unspec"): Add UNSPEC_TTEST.
+	(define_c_enum "unspecv"): Add UNSPECV_TSTART, UNSPECV_TCOMMIT and
+	UNSPECV_TCANCEL.
+	(tstart, ttest, tcommit, tcancel): New instructions.
+	* config/aarch64/arm_acle.h (__tstart, __tcommit): New.
+	(__tcancel, __ttest): New.
+	(_TMFAILURE_REASON, _TMFAILURE_RTRY, _TMFAILURE_CNCL): New macro.
+	(_TMFAILURE_MEM, _TMFAILURE_IMP, _TMFAILURE_ERR): Likewise.
+	(_TMFAILURE_SIZE, _TMFAILURE_NEST, _TMFAILURE_DBG): Likewise.
+	(_TMFAILURE_INT, _TMFAILURE_TRIVIAL): Likewise.
+	* config/arm/types.md: Add new tme type attr.
+	* doc/invoke.texi: Document "tme".
+
+2019-07-31  Joel Hutton  <Joel.Hutton@arm.com>
+
+	* config/arm/arm_cmse.h (cmse_nonsecure_caller): Add
+	warn_unused_result attribute.
+	(cmse_check_address_range): Add warn_unused_result attribute.
+
+2019-07-31  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91257
+	* tree-vrp.c (union_ranges): Unify equality and less tests
+	by using compare_values.  Re-order cheap tests first.
+
+2019-07-31  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/91301
+	* gimplify.c (gimplify_omp_for): If for class iterator on
+	distribute parallel for there is no data sharing clause
+	on inner_for_stmt, look for private clause on combined
+	parallel too and if found, move it to inner_for_stmt.
+
+2019-07-31  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* lra-int.h (lra_operand_data): Remove early_clobber field.
+	(lra_insn_reg): Likewise.
+	* lra.c (debug_operand_data): Update accordingly.
+	(setup_operand_alternative): Likewise.
+	(new_insn_reg): Likewise.  Remove early_clobber parameter.
+	(collect_non_operand_hard_regs): Update call accordingly.
+	Don't assign to lra_insn_reg::early_clobber.
+	(add_regs_to_insn_regno_info): Remove early_clobber parameter
+	and update calls to new_insn_reg.
+	(lra_update_insn_regno_info): Update calls accordingly.
+	* lra-constraints.c (update_and_check_small_class_inputs): Take the
+	alternative number as a parameter and test whether the operand
+	is earlyclobbered in that particular alternative.
+	(process_alt_operands): Update call accordingly.  Use per-alternative
+	checks for earyclobber here too.
+	* lra-lives.c (reg_early_clobber_p): Check early_clobber_alts
+	against zero for IRA_UNKNOWN_ALT.
+
+2019-07-30  Uroš Bizjak  <ubizjak@gmail.com>
+
+	* config/alpha/alpha.c (alpha_option_override): Quote a C type.
+
+2019-07-30  Wilco Dijkstra  <wdijkstr@arm.com>
+
+	* config/arm/thumb2.md (thumb2_movsi_insn): Adjust literal offset.
+	* config/arm/vfp.md (thumb2_movsi_vfp): Likewise.
+
+2019-07-30  Martin Liska  <mliska@suse.cz>
+
+	PR ipa/89330
+	* cgraph.c (cgraph_edge::make_direct): Use
+	edge->indirect_unknown_callee as edge->resolve_speculation can
+	deallocate edge which is this pointer.
+
+2019-07-30  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91257
+	* bitmap.c (bitmap_ior_and_compl_into): Open-code.
+
+2019-07-30  Martin Liska  <mliska@suse.cz>
+
+	* doc/invoke.texi: Document new behavior.
+	* lto-wrapper.c (cpuset_popcount): New function
+	is a copy of libgomp/config/linux/proc.c.
+	(init_num_threads): Likewise.
+	(run_gcc): Automatically detect core count for -flto.
+	(jobserver_active_p): New function.
+
+2019-07-30  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91257
+	* bitmap.h (bitmap_ior_into_and_free): Declare.
+	* bitmap.c (bitmap_list_unlink_element): Add defaulted param
+	whether to add the unliked element to the freelist.
+	(bitmap_list_insert_element_after): Add defaulted param for
+	an already allocated element.
+	(bitmap_ior_into_and_free): New function.
+	* tree-ssa-structalias.c (condense_visit): Reduce the
+	ponts-to and edge bitmaps of the SCC members in a
+	logarithmic fashion rather than all to one.
+
 2019-07-30  Richard Sandiford  <richard.sandiford@arm.com>
 
 	* tree-ssa-math-opts.c (convert_mult_to_fma): Add a mul_cond
