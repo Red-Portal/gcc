@@ -252,9 +252,8 @@ GOMP_cancel (int which, bool do_cancel)
 	    taskgroup = taskgroup->prev;
 	  if (!taskgroup->cancelled)
 	    {
-	      gomp_mutex_lock (&team->task_lock);
-	      taskgroup->cancelled = true;
-	      gomp_mutex_unlock (&team->task_lock);
+	      __atomic_store_n (&taskgroup->cancelled, true,
+				MEMMODEL_RELEASE);
 	    }
 	}
       return true;
@@ -263,7 +262,7 @@ GOMP_cancel (int which, bool do_cancel)
   gomp_team_barrier_cancel (team);
   return true;
 }
-
+
 /* The public OpenMP API for thread and team related inquiries.  */
 
 int

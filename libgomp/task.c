@@ -314,11 +314,13 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	return;
       if (thr->task->taskgroup)
 	{
-	  if (thr->task->taskgroup->cancelled)
+	  if (__atomic_load_n(&thr->task->taskgroup->cancelled,
+			      MEMMODEL_ACQUIRE))
 	    return;
 	  if (thr->task->taskgroup->workshare
 	      && thr->task->taskgroup->prev
-	      && thr->task->taskgroup->prev->cancelled)
+	      && __atomic_load_n(&thr->task->taskgroup->prev->cancelled,
+				 MEMMODEL_ACQUIRE))
 	    return;
 	}
     }
@@ -402,31 +404,30 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       task->fn = fn;
       task->fn_data = arg;
       task->final_task = (flags & GOMP_TASK_FLAG_FINAL) >> 1;
-      gomp_mutex_lock (&team->task_lock);
       /* If parallel or taskgroup has been cancelled, don't start new
-	 tasks.  */
-      if (__builtin_expect (gomp_cancel_var, 0)
-	  && !task->copy_ctors_done)
+	 tasks. */
+      if (__builtin_expect (gomp_cancel_var, 0) && !task->copy_ctors_done)
 	{
 	  if (gomp_team_barrier_cancelled (&team->barrier))
 	    {
 	    do_cancel:
-	      gomp_mutex_unlock (&team->task_lock);
 	      gomp_finish_task (task);
 	      free (task);
 	      return;
 	    }
 	  if (taskgroup)
 	    {
-	      if (taskgroup->cancelled)
+	      if (__atomic_load_n(&taskgroup->cancelled, MEMMODEL_ACQUIRE))
 		goto do_cancel;
 	      if (taskgroup->workshare
 		  && taskgroup->prev
-		  && taskgroup->prev->cancelled)
+		  && __atomic_load_n(&taskgroup->prev->cancelled,
+				     MEMMODEL_ACQUIRE))
 		goto do_cancel;
 	    }
 	}
 
+      gomp_mutex_lock (&team->task_lock);
       if (taskgroup)
 	++taskgroup->num_children;
       ++parent->num_children;
@@ -574,11 +575,13 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
 	return true;
       if (thr->task->taskgroup)
 	{
-	  if (thr->task->taskgroup->cancelled)
+	  if (__atomic_load_n(&thr->task->taskgroup->cancelled,
+			      MEMMODEL_ACQUIRE))
 	    return true;
 	  if (thr->task->taskgroup->workshare
 	      && thr->task->taskgroup->prev
-	      && thr->task->taskgroup->prev->cancelled)
+	      && __atomic_load_n(&thr->task->taskgroup->prev->cancelled,
+				 MEMMODEL_ACQUIRE))
 	    return true;
 	}
     }
@@ -662,28 +665,30 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
   task->fn = NULL;
   task->fn_data = ttask;
   task->final_task = 0;
-  gomp_mutex_lock (&team->task_lock);
+  //gomp_mutex_lock (&team->task_lock);
   /* If parallel or taskgroup has been cancelled, don't start new tasks.  */
   if (__builtin_expect (gomp_cancel_var, 0))
     {
       if (gomp_team_barrier_cancelled (&team->barrier))
 	{
 	do_cancel:
-	  gomp_mutex_unlock (&team->task_lock);
+	  //gomp_mutex_unlock (&team->task_lock);
 	  gomp_finish_task (task);
 	  free (task);
 	  return true;
 	}
       if (taskgroup)
 	{
-	  if (taskgroup->cancelled)
+	  if (__atomic_load_n(&taskgroup->cancelled, MEMMODEL_ACQUIRE))
 	    goto do_cancel;
 	  if (taskgroup->workshare
 	      && taskgroup->prev
-	      && taskgroup->prev->cancelled)
+	      && __atomic_load_n(&taskgroup->prev->cancelled,
+				 MEMMODEL_ACQUIRE))
 	    goto do_cancel;
 	}
     }
+  gomp_mutex_lock (&team->task_lock);
   if (depend_size)
     {
       gomp_task_handle_depend (task, parent, depend);
@@ -774,11 +779,12 @@ gomp_task_run_pre (struct gomp_task *task, struct gomp_team *team)
 	return true;
       if (taskgroup)
 	{
-	  if (taskgroup->cancelled)
+	  if (__atomic_load_n(&taskgroup->cancelled, MEMMODEL_ACQUIRE))
 	    return true;
 	  if (taskgroup->workshare
 	      && taskgroup->prev
-	      && taskgroup->prev->cancelled)
+	      && __atomic_load_n(&taskgroup->prev->cancelled,
+				 MEMMODEL_ACQUIRE))
 	    return true;
 	}
     }
@@ -1253,11 +1259,13 @@ GOMP_taskwait_depend (void **depend)
 	return;
       if (thr->task->taskgroup)
 	{
-	  if (thr->task->taskgroup->cancelled)
+	  if (__atomic_load_n(&thr->task->taskgroup->cancelled,
+			      MEMMODEL_ACQUIRE))
 	    return;
 	  if (thr->task->taskgroup->workshare
 	      && thr->task->taskgroup->prev
-	      && thr->task->taskgroup->prev->cancelled)
+	      && __atomic_load_n(&thr->task->taskgroup->prev->cancelled,
+				 MEMMODEL_ACQUIRE))
 	    return;
 	}
     }
