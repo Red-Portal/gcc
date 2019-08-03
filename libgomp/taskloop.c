@@ -284,7 +284,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	  task->fn_data = arg;
 	  task->final_task = (flags & GOMP_TASK_FLAG_FINAL) >> 1;
 	}
-      gomp_mutex_lock (&team->task_lock);
       /* If parallel or taskgroup has been cancelled, don't start new
 	 tasks.  */
       if (__builtin_expect (gomp_cancel_var, 0)
@@ -293,7 +292,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	  if (gomp_team_barrier_cancelled (&team->barrier))
 	    {
 	    do_cancel:
-	      gomp_mutex_unlock (&team->task_lock);
 	      for (i = 0; i < num_tasks; i++)
 		{
 		  gomp_finish_task (tasks[i]);
@@ -305,18 +303,21 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    }
 	  if (taskgroup)
 	    {
-	      if (taskgroup->cancelled)
+	      if (__atomic_load_n (&taskgroup->cancelled, MEMMODEL_ACQUIRE))
 		goto do_cancel;
 	      if (taskgroup->workshare
 		  && taskgroup->prev
-		  && taskgroup->prev->cancelled)
+		  && __atomic_load_n (&taskgroup->prev->cancelled,
+				      MEMMODEL_ACQUIRE))
 		goto do_cancel;
 	    }
 	}
+      gomp_mutex_lock (&team->task_lock);
       if (taskgroup)
-	taskgroup->num_children += num_tasks;
-      parent->num_children += num_tasks;
-      team->task_count += num_tasks;
+	__atomic_add_fetch (&taskgroup->num_children, num_tasks,
+			    MEMMODEL_ACQ_REL);
+      __atomic_add_fetch (&parent->num_children, num_tasks, MEMMODEL_ACQ_REL);
+      __atomic_add_fetch (&team->task_count, num_tasks, MEMMODEL_ACQ_REL);
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
