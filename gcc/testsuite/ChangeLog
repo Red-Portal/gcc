@@ -1,3 +1,259 @@
+2019-08-08  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/87519 - bogus warning with -Wsign-conversion.
+	* g++.dg/warn/Wsign-conversion-5.C: New test.
+
+	* g++.dg/cpp2a/inline-asm3.C: New test.
+
+2019-08-07  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91359
+	* pr91359_2.f:  Fix missing hyphen in dg-do
+	* pr91359_1.f:  Ditto.  Remove RESULT variable to test actual fix!
+
+2019-08-07  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/67533
+	* g++.dg/tls/thread_local-ice5.C: New test.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/init_13.c: New test.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/init_12.c: Expect w1 to be moved into
+	a temporary FPR.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/clastb_8.c: New test.
+
+2019-08-07  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/91385
+	* gcc.target/i386/pr91385.c: New test.
+
+2019-08-07  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/81429 - wrong parsing of constructor with C++11 attribute.
+	* g++.dg/cpp0x/gen-attrs-68.C: New test.
+	* g++.dg/cpp0x/gen-attrs-69.C: New test.
+
+2019-08-07  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/91346 - Implement P1668R1, allow unevaluated asm in constexpr.
+	* g++.dg/cpp2a/inline-asm1.C: New test.
+	* g++.dg/cpp2a/inline-asm2.C: New test.
+	* g++.dg/cpp1y/constexpr-neg1.C: Adjust dg-error.
+
+2019-08-07  Janne Blomqvist  <jb@gcc.gnu.org>
+
+	PR fortran/53796
+	* gfortran.dg/inquire_recl_f2018.f90: Test for unconnected unit
+	with inquire via filename.
+
+2019-08-07  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-c++-common/gomp/target-data-1.c (foo): Use use_device_addr clause
+	instead of use_device_ptr clause where required by OpenMP 5.0, add
+	further tests for both use_device_ptr and use_device_addr clauses.
+
+2019-08-07  Kewen Lin  <linkw@gcc.gnu.org>
+
+	* gcc.target/powerpc/vec_rotate-1.c: New test.
+	* gcc.target/powerpc/vec_rotate-2.c: New test.
+	* gcc.target/powerpc/vec_rotate-3.c: New test.
+	* gcc.target/powerpc/vec_rotate-4.c: New test.
+
+2019-08-07  Alexandre Oliva <oliva@adacore.com>
+
+	* gcc.target/i386/math_m_pi.h: New.
+	* gcc.target/i386/sse4_1-round.h: Use it.
+	* gcc.target/i386/pr73350.c: Likewise.
+	* gcc.target/i386/avx512f-vfixupimmpd-2.c: Likewise.
+	* gcc.target/i386/avx512f-vfixupimmps-2.c: Likewise.
+	* gcc.target/i386/avx512f-vfixupimmsd-2.c: Likewise.
+	* gcc.target/i386/avx512f-vfixupimmss-2.c: Likewise.
+	* gcc.target/i386/avx512f-vfixupimmss-2.c: Likewise.
+	* gcc.target/i386/avx-ceil-sfix-2-vec.c: Likewise.  Drop
+	dg-skip-if "no M_PI".
+	* gcc.target/i386/avx-cvt-2-vec.c: Likewise.
+	* gcc.target/i386/avx-floor-sfix-2-vec.c: Likewise.
+	* gcc.target/i386/avx-rint-sfix-2-vec.c: Likewise.
+	* gcc.target/i386/avx-round-sfix-2-vec.c: Likewise.
+	* gcc.target/i386/avx512f-ceil-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-ceil-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-ceilf-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-ceilf-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-floor-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-floor-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-floorf-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-floorf-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-rint-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-rintf-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-round-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-roundf-sfix-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-trunc-vec-1.c: Likewise.
+	* gcc.target/i386/avx512f-truncf-vec-1.c: Likewise.
+	* gcc.target/i386/sse2-cvt-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-ceil-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-ceil-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-ceilf-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-ceilf-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-floor-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-floor-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-floorf-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-floorf-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-rint-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-rint-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-rintf-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-rintf-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-round-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-round-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-roundf-sfix-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-roundf-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-roundsd-4.c: Likewise.
+	* gcc.target/i386/sse4_1-roundss-4.c: Likewise.
+	* gcc.target/i386/sse4_1-trunc-vec.c: Likewise.
+	* gcc.target/i386/sse4_1-truncf-vec.c: Likewise.
+
+2019-08-06  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91359
+	* gfortran.dg/pr91359_1.f: New test.
+	* gfortran.dg/pr91359_2.f: Ditto.
+
+2019-08-06  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/42546
+	* gfortran.dg/allocated_1.f90: New test.
+	* gfortran.dg/allocated_2.f90: Ditto.
+
+2019-08-06  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* gcc.target/i386/avx512vp2intersect-2intersect-1b.c (AVX512F):
+	Remove.
+	(AVX512VP2INTERSECT): Define.
+	* gcc.target/i386/avx512vp2intersect-2intersectvl-1b.c (AVX512F):
+	Remove.
+	(AVX512VP2INTERSECT): Define.
+
+2019-08-06  Paolo Carlini  <paolo.carlini@oracle.com>
+
+	* g++.dg/cpp0x/desig1.C: Check location too.
+
+2019-08-05  Marek Polacek  <polacek@redhat.com>
+
+	DR 2413 - typename in conversion-function-ids.
+	* g++.dg/cpp2a/typename17.C: New test.
+
+2019-08-05  Martin Sebor  <msebor@redhat.com>
+
+	PR middle-end/50476
+	* gcc.dg/uninit-pr50476.c: New test.
+
+	PR c++/60517
+	* g++.dg/pr60517.C: New test.
+
+2019-08-02  Tom Honermann  <tom@honermann.net>
+
+	PR c++/88095
+	* g++.dg/cpp2a/udlit-class-nttp-ctad.C: New test.
+	* g++.dg/cpp2a/udlit-class-nttp-ctad-neg.C: New test.
+	* g++.dg/cpp2a/udlit-class-nttp-ctad-neg2.C: New test.
+	* g++.dg/cpp2a/udlit-class-nttp.C: New test.
+	* g++.dg/cpp2a/udlit-class-nttp-neg.C: New test.
+	* g++.dg/cpp2a/udlit-class-nttp-neg2.C: New test.
+
+2019-08-05  Steven g. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91372
+	* gfortran.dg/pr91372.f90: New test.
+
+2019-08-05  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/91338 - Implement P1161R3: Deprecate a[b,c].
+	* g++.dg/cpp2a/comma1.C: New test.
+	* g++.dg/cpp2a/comma2.C: New test.
+	* g++.dg/cpp2a/comma3.C: New test.
+	* g++.dg/cpp2a/comma4.C: New test.
+
+2019-08-05  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/mask_load_1.c: New test.
+
+2019-08-05  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	* gcc.target/msp430/pr80993.c: Add cleanup-saved-temps to final
+	actions.
+
+2019-08-05  Martin Liska  <mliska@suse.cz>
+
+	PR c++/91334
+	* g++.dg/torture/pr91334.C: New test.
+
+2019-08-05  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/91169
+	* gnat.dg/array37.adb: New testcase.
+
+2019-08-05  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/91341
+	* gcc.target/i386/avx-loadu2-m128-1.c: New test.
+	* gcc.target/i386/avx-loadu2-m128-2.c: New test.
+	* gcc.target/i386/avx-loadu2-m128d-1.c: New test.
+	* gcc.target/i386/avx-loadu2-m128d-2.c: New test.
+	* gcc.target/i386/avx-loadu2-m128i-1.c: New test.
+	* gcc.target/i386/avx-loadu2-m128i-2.c: New test.
+	* gcc.target/i386/avx-storeu2-m128-1.c: New test.
+	* gcc.target/i386/avx-storeu2-m128-2.c: New test.
+	* gcc.target/i386/avx-storeu2-m128d-1.c: New test.
+	* gcc.target/i386/avx-storeu2-m128d-2.c: New test.
+	* gcc.target/i386/avx-storeu2-m128i-1.c: New test.
+	* gcc.target/i386/avx-storeu2-m128i-2.c: New test.
+
+2019-08-05  Kito Cheng  <kito.cheng@sifive.com>
+
+	* gcc.target/riscv/promote-type-for-libcall.c: New.
+
+2019-08-02  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/90985
+	* gfortran.dg/pr90985.f90: New test.
+
+2019-08-02  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/90986
+	* gfortran.dg/equiv_10.f90: New test.
+
+2019-08-02  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/56428
+	* g++.dg/cpp0x/nontype4.C: New test.
+
+2019-08-02  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/53009
+	* g++.dg/cpp0x/nontype3.C: New test.
+
+2019-08-02  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/77575
+	* g++.dg/cpp0x/nontype2.C: New test.
+
+2019-08-02  Steve Ellcey  <sellcey@marvell.com>
+
+	* gcc.target/aarch64/simd_pcs_attribute.c: New test.
+	* gcc.target/aarch64/simd_pcs_attribute-2.c: Ditto.
+	* gcc.target/aarch64/simd_pcs_attribute-3.c: Ditto.
+
+2019-08-02  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/91201
+	* gcc.target/i386/sse4_1-pr91201.c: New test.
+
 2019-08-02  Marek Polacek  <polacek@redhat.com>
 
 	PR c++/91230 - wrong error with __PRETTY_FUNCTION__ and generic lambda.

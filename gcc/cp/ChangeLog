@@ -1,3 +1,150 @@
+2019-08-08  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/87519 - bogus warning with -Wsign-conversion.
+	* typeck.c (cp_build_binary_op): Use same_type_p instead of comparing
+	the types directly.
+
+	* constexpr.c (inline_asm_in_constexpr_error): New.
+	(cxx_eval_constant_expression) <case ASM_EXPR>: Call it.
+	(potential_constant_expression_1) <case ASM_EXPR>: Likewise.
+
+2019-08-08  Jakub Jelinek  <jakub@redhat.com>
+
+	* semantics.c (finish_omp_clauses): For C_ORT_OMP
+	OMP_CLAUSE_USE_DEVICE_* clauses use oacc_reduction_head bitmap
+	instead of generic_head to track duplicates.
+
+2019-08-07  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/81429 - wrong parsing of constructor with C++11 attribute.
+	* parser.c (cp_parser_constructor_declarator_p): Handle the scenario
+	when a parameter declaration begins with [[attribute]].
+
+2019-08-07  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/91346 - Implement P1668R1, allow unevaluated asm in constexpr.
+	* constexpr.c (cxx_eval_constant_expression): Handle ASM_EXPR.
+	(potential_constant_expression_1) <case ASM_EXPR>: Allow.
+	* cp-tree.h (finish_asm_stmt): Adjust.
+	* parser.c (cp_parser_asm_definition): Grab the locaion of "asm" and
+	use it.  Change an error to a pedwarn.  Allow asm in C++2a, warn
+	otherwise.
+	* pt.c (tsubst_expr): Pass a location down to finish_asm_stmt.
+	* semantics.c (finish_asm_stmt): New location_t parameter.  Use it.
+
+2019-08-07  Jakub Jelinek  <jakub@redhat.com>
+
+	* parser.c (cp_parser_omp_clause_name): Parse use_device_addr clause.
+	(cp_parser_omp_all_clauses): Handle PRAGMA_OMP_CLAUSE_USE_DEVICE_ADDR.
+	(OMP_TARGET_DATA_CLAUSE_MASK): Add PRAGMA_OMP_CLAUSE_USE_DEVICE_ADDR.
+	(cp_parser_omp_target_data): Handle PRAGMA_OMP_CLAUSE_USE_DEVICE_ADDR
+	like PRAGMA_OMP_CLAUSE_USE_DEVICE_PTR, adjust diagnostics about no
+	map or use_device_* clauses.
+	* semantics.c (finish_omp_clauses): For OMP_CLAUSE_USE_DEVICE_PTR
+	in OpenMP, require pointer or reference to pointer type rather than
+	pointer or array or reference to pointer or array type. Handle
+	OMP_CLAUSE_USE_DEVICE_ADDR.
+	* pt.c (tsubst_omp_clauses): Handle OMP_CLAUSE_USE_DEVICE_ADDR.
+
+2019-08-06  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91378 - ICE with noexcept and auto return type.
+	* pt.c (maybe_instantiate_noexcept): push_to_top_level.
+
+2019-08-06  Paolo Carlini  <paolo.carlini@oracle.com>
+
+	* decl.c (check_array_designated_initializer): Use
+	cp_expr_loc_or_input_loc in one place.
+
+2019-08-06  Jakub Jelinek  <jakub@redhat.com>
+
+	* parser.c (cp_parser_omp_for_loop): For OMP_LOOP, ignore parallel
+	clauses and predetermine iterator as lastprivate.
+	* semantics.c (handle_omp_for_class_iterator): Use
+	OMP_CLAUSE_LASTPRIVATE_LOOP_IV instead of
+	OMP_CLAUSE_LASTPRIVATE_TASKLOOP_IV, set it for lastprivate also
+	on OMP_LOOP construct.  If a clause is missing for class iterator
+	on OMP_LOOP, add firstprivate clause, and if there is private
+	clause, turn it into firstprivate too.
+	(finish_omp_for): Formatting fix.  For OMP_LOOP, adjust
+	OMP_CLAUSE_LASTPRIVATE_LOOP_IV clause CP_CLAUSE_INFO, so that it
+	uses copy ctor instead of default ctor.
+	* cp-gimplify.c (cp_gimplify_expr): Handle OMP_LOOP like
+	OMP_DISTRIBUTE etc.
+	(cp_fold_r): Likewise.
+	(cp_genericize_r): Likewise.
+	(cxx_omp_finish_clause): Also finish lastprivate clause with
+	OMP_CLAUSE_LASTPRIVATE_LOOP_IV flag.
+	* pt.c (tsubst_omp_clauses): Handle OMP_CLAUSE_BIND.
+	(tsubst_omp_for_iterator): For OMP_LOOP, ignore parallel
+	clauses and predetermine iterator as lastprivate.
+	* constexpr.c (potential_constant_expression_1): Handle OMP_LOOP
+	like OMP_DISTRIBUTE etc.
+
+2019-08-05  Marek Polacek  <polacek@redhat.com>
+
+	DR 2413 - typename in conversion-function-ids.
+	* parser.c (cp_parser_conversion_type_id): Call
+	cp_parser_type_specifier_seq with CP_PARSER_FLAGS_TYPENAME_OPTIONAL
+	instead of CP_PARSER_FLAGS_NONE.
+
+2019-08-05  Paolo Carlini  <paolo.carlini@oracle.com>
+
+	* cp-tree.h (cp_expr_loc_or_input_loc): New.
+	(cxx_incomplete_type_diagnostic): Use it.
+	* call.c (build_converted_constant_expr_internal, convert_like_real,
+	convert_arg_to_ellipsis, convert_for_arg_passing, build_over_call,
+	build_cxx_call, perform_implicit_conversion_flags,
+	initialize_reference): Likewise.
+	* constexpr.c (cxx_eval_internal_function, cxx_eval_call_expression,
+	eval_and_check_array_index, cxx_eval_store_expression,
+	cxx_eval_statement_list, cxx_eval_loop_expr,
+	cxx_eval_constant_expression, potential_constant_expression_1):
+	Likewise.
+	* constraint.cc (check_for_logical_overloads,
+	satisfy_predicate_constraint): Likewise.
+	* cp-gimplify.c (cp_gimplify_expr): Likewise.
+	* cvt.c (cp_convert_to_pointer, convert_to_reference,
+	cp_convert_and_check, ocp_convert, maybe_warn_nodiscard): Likewise.
+	* decl.c (pop_switch): Likewise.
+	* decl2.c (delete_sanity): Likewise.
+	* error.c (location_of): Likewise.
+	* init.c (maybe_warn_list_ctor, build_aggr_init,
+	warn_placement_new_too_small, build_new_1, build_vec_init): Likewise.
+	* lex.c (unqualified_name_lookup_error): Likewise.
+	* parser.c (cp_parser_initializer_list, cp_parser_omp_for_cond):
+	Likewise.
+	* pt.c (check_for_bare_parameter_packs, check_valid_ptrmem_cst_expr,
+	unify_arg_conversion, convert_nontype_argument,
+	tsubst_copy_and_build, resolve_typename_type): Likewise.
+	* semantics.c (maybe_convert_cond, finish_call_expr,
+	cp_build_vec_convert): Likewise.
+	* typeck.c (decay_conversion, rationalize_conditional_expr,
+	cp_build_unary_op, build_x_compound_expr_from_list,
+	maybe_warn_about_returning_address_of_local,
+	maybe_warn_pessimizing_move): Likewise.
+	* typeck2.c (check_narrowing, digest_init_r,
+	process_init_constructor_array): Likewise.
+
+2019-08-05  Tom Honermann  <tom@honermann.net>
+
+	* parser.c (cp_parser_template_declaration_after_parameters): Enable
+	class template argument deduction for non-type template parameters
+	in literal operator templates.
+
+2019-08-05  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/91338 - Implement P1161R3: Deprecate a[b,c].
+	* parser.c (cp_parser_postfix_open_square_expression): Warn about uses
+	of a comma operator within a subscripting expression.
+	(cp_parser_skip_to_closing_square_bracket_1): New function, made out
+	of...
+	(cp_parser_skip_to_closing_square_bracket): ...this.
+
+2019-08-05  Jason Merrill  <jason@redhat.com>
+
+	* semantics.c (force_paren_expr): Preserve location.
+
 2019-08-02  Marek Polacek  <polacek@redhat.com>
 
 	PR c++/91230 - wrong error with __PRETTY_FUNCTION__ and generic lambda.

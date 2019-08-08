@@ -1010,7 +1010,7 @@ find_and_merge_options (int fd, off_t file_offset, const char *prefix,
       struct cl_decoded_option *f2decoded_options;
       unsigned int f2decoded_options_count;
       get_options_from_collect_gcc_options (collect_gcc,
-					    fopts, CL_LANG_ALL,
+					    fopts, CL_DRIVER,
 					    &f2decoded_options,
 					    &f2decoded_options_count);
       if (!fdecoded_options)
@@ -1237,8 +1237,8 @@ jobserver_active_p (void)
   return (sscanf (n + strlen (needle), "%d,%d", &rfd, &wfd) == 2
 	  && rfd > 0
 	  && wfd > 0
-	  && fcntl (rfd, F_GETFD) >= 0
-	  && fcntl (wfd, F_GETFD) >= 0);
+	  && is_valid_fd (rfd)
+	  && is_valid_fd (wfd));
 }
 
 /* Execute gcc. ARGC is the number of arguments. ARGV contains the arguments. */
@@ -1283,7 +1283,7 @@ run_gcc (unsigned argc, char *argv[])
     fatal_error (input_location,
 		 "environment variable %<COLLECT_GCC_OPTIONS%> must be set");
   get_options_from_collect_gcc_options (collect_gcc, collect_gcc_options,
-					CL_LANG_ALL,
+					CL_DRIVER,
 					&decoded_options,
 					&decoded_options_count);
 

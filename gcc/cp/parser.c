@@ -2669,6 +2669,8 @@ static bool cp_parser_init_statement_p
   (cp_parser *);
 static bool cp_parser_skip_to_closing_square_bracket
   (cp_parser *);
+static int cp_parser_skip_to_closing_square_bracket_1
+  (cp_parser *, enum cpp_ttype);
 
 /* Concept-related syntactic transformations */
 
@@ -7522,7 +7524,33 @@ cp_parser_postfix_open_square_expression (cp_parser *parser,
 	  index = cp_parser_braced_list (parser, &expr_nonconst_p);
 	}
       else
-	index = cp_parser_expression (parser);
+	{
+	  /* [depr.comma.subscript]: A comma expression appearing as
+	     the expr-or-braced-init-list of a subscripting expression
+	     is deprecated.  A parenthesized comma expression is not
+	     deprecated.  */
+	  if (warn_comma_subscript)
+	    {
+	      /* Save tokens so that we can put them back.  */
+	      cp_lexer_save_tokens (parser->lexer);
+
+	      /* Look for ',' that is not nested in () or {}.  */
+	      if (cp_parser_skip_to_closing_square_bracket_1 (parser,
+							      CPP_COMMA) == -1)
+		{
+		  auto_diagnostic_group d;
+		  warning_at (cp_lexer_peek_token (parser->lexer)->location,
+			      OPT_Wcomma_subscript,
+			      "top-level comma expression in array subscript "
+			      "is deprecated");
+		}
+
+	      /* Roll back the tokens we skipped.  */
+	      cp_lexer_rollback_tokens (parser->lexer);
+	    }
+
+	  index = cp_parser_expression (parser);
+	}
     }
 
   parser->greater_than_is_operator_p = saved_greater_than_is_operator_p;
@@ -14816,8 +14844,9 @@ cp_parser_conversion_type_id (cp_parser* parser)
   parser->type_definition_forbidden_message
     = G_("types may not be defined in a conversion-type-id");
 
-  /* Parse the type-specifiers.  */
-  cp_parser_type_specifier_seq (parser, CP_PARSER_FLAGS_NONE,
+  /* Parse the type-specifiers.  DR 2413 clarifies that `typename' is
+     optional in conversion-type-id.  */
+  cp_parser_type_specifier_seq (parser, CP_PARSER_FLAGS_TYPENAME_OPTIONAL,
 				/*is_declaration=*/false,
 				/*is_trailing_return=*/false,
 				&type_specifiers);
@@ -19788,16 +19817,18 @@ cp_parser_asm_definition (cp_parser* parser)
   bool invalid_inputs_p = false;
   bool invalid_outputs_p = false;
   required_token missing = RT_NONE;
+  location_t asm_loc = cp_lexer_peek_token (parser->lexer)->location;
 
   /* Look for the `asm' keyword.  */
   cp_parser_require_keyword (parser, RID_ASM, RT_ASM);
 
+  /* In C++2a, unevaluated inline assembly is permitted in constexpr
+     functions.  */
   if (parser->in_function_body
-      && DECL_DECLARED_CONSTEXPR_P (current_function_decl))
-    {
-      error ("%<asm%> in %<constexpr%> function");
-      cp_function_chain->invalid_constexpr = true;
-    }
+      && DECL_DECLARED_CONSTEXPR_P (current_function_decl)
+      && (cxx_dialect < cxx2a))
+    pedwarn (asm_loc, 0, "%<asm%> in %<constexpr%> function only available "
+	     "with %<-std=c++2a%> or %<-std=gnu++2a%>");
 
   /* Handle the asm-qualifier-list.  */
   location_t volatile_loc = UNKNOWN_LOCATION;
@@ -20003,7 +20034,7 @@ cp_parser_asm_definition (cp_parser* parser)
       /* Create the ASM_EXPR.  */
       if (parser->in_function_body)
 	{
-	  asm_stmt = finish_asm_stmt (volatile_p, string, outputs,
+	  asm_stmt = finish_asm_stmt (asm_loc, volatile_p, string, outputs,
 				      inputs, clobbers, labels, inline_p);
 	  /* If the extended syntax was not used, mark the ASM_EXPR.  */
 	  if (!extended_p)
@@ -22857,16 +22888,25 @@ cp_parser_braced_list (cp_parser* parser, bool* non_constant_p)
 }
 
 /* Consume tokens up to, and including, the next non-nested closing `]'.
-   Returns true iff we found a closing `]'.  */
+   Returns 1 iff we found a closing `]'.  Returns -1 if OR_TTYPE is not
+   CPP_EOF and we found an unnested token of that type.  */
 
-static bool
-cp_parser_skip_to_closing_square_bracket (cp_parser *parser)
+static int
+cp_parser_skip_to_closing_square_bracket_1 (cp_parser *parser,
+					    enum cpp_ttype or_ttype)
 {
   unsigned square_depth = 0;
+  unsigned paren_depth = 0;
+  unsigned brace_depth = 0;
 
   while (true)
     {
-      cp_token * token = cp_lexer_peek_token (parser->lexer);
+      cp_token *token = cp_lexer_peek_token (parser->lexer);
+
+      /* Have we found what we're looking for before the closing square?  */
+      if (token->type == or_ttype && or_ttype != CPP_EOF
+	  && brace_depth == 0 && paren_depth == 0 && square_depth == 0)
+	return -1;
 
       switch (token->type)
 	{
@@ -22876,18 +22916,36 @@ cp_parser_skip_to_closing_square_bracket (cp_parser *parser)
 	  /* FALLTHRU */
 	case CPP_EOF:
 	  /* If we've run out of tokens, then there is no closing `]'.  */
-	  return false;
+	  return 0;
 
         case CPP_OPEN_SQUARE:
           ++square_depth;
           break;
 
         case CPP_CLOSE_SQUARE:
-	  if (!square_depth--)
+	  if (square_depth-- == 0)
 	    {
 	      cp_lexer_consume_token (parser->lexer);
-	      return true;
+	      return 1;
 	    }
+	  break;
+
+	case CPP_OPEN_BRACE:
+	  ++brace_depth;
+	  break;
+
+	case CPP_CLOSE_BRACE:
+	  if (brace_depth-- == 0)
+	    return 0;
+	  break;
+
+	case CPP_OPEN_PAREN:
+	  ++paren_depth;
+	  break;
+
+	case CPP_CLOSE_PAREN:
+	  if (paren_depth-- == 0)
+	    return 0;
 	  break;
 
 	default:
@@ -22897,6 +22955,15 @@ cp_parser_skip_to_closing_square_bracket (cp_parser *parser)
       /* Consume the token.  */
       cp_lexer_consume_token (parser->lexer);
     }
+}
+
+/* Consume tokens up to, and including, the next non-nested closing `]'.
+   Returns true iff we found a closing `]'.  */
+
+static bool
+cp_parser_skip_to_closing_square_bracket (cp_parser *parser)
+{
+  return cp_parser_skip_to_closing_square_bracket_1 (parser, CPP_EOF) == 1;
 }
 
 /* Return true if we are looking at an array-designator, false otherwise.  */
@@ -23122,7 +23189,7 @@ cp_parser_initializer_list (cp_parser* parser, bool* non_constant_p,
 	  {
 	    if (IDENTIFIER_MARKED (designator))
 	      {
-		error_at (cp_expr_loc_or_loc (val, input_location),
+		error_at (cp_expr_loc_or_input_loc (val),
 			  "%<.%s%> designator used multiple times in "
 			  "the same initializer list",
 			  IDENTIFIER_POINTER (designator));
@@ -27790,7 +27857,9 @@ cp_parser_constructor_declarator_p (cp_parser *parser, cp_parser_flags flags,
 	  /* A parameter declaration begins with a decl-specifier,
 	     which is either the "attribute" keyword, a storage class
 	     specifier, or (usually) a type-specifier.  */
-	  && !cp_lexer_next_token_is_decl_specifier_keyword (parser->lexer))
+	  && !cp_lexer_next_token_is_decl_specifier_keyword (parser->lexer)
+	  /* A parameter declaration can also begin with [[attribute]].  */
+	  && !cp_next_tokens_can_be_std_attribute_p (parser))
 	{
 	  tree type;
 	  tree pushed_scope = NULL_TREE;
@@ -28105,7 +28174,10 @@ cp_parser_template_declaration_after_parameters (cp_parser* parser,
 	    {
 	      tree parm_list = TREE_VEC_ELT (parameter_list, 0);
 	      tree parm = INNERMOST_TEMPLATE_PARMS (parm_list);
-	      if (CLASS_TYPE_P (TREE_TYPE (parm)))
+	      if (TREE_CODE (parm) != PARM_DECL)
+		ok = false;
+	      else if (MAYBE_CLASS_TYPE_P (TREE_TYPE (parm))
+		       && !TEMPLATE_PARM_PARAMETER_PACK (DECL_INITIAL (parm)))
 		/* OK, C++20 string literal operator template.  We don't need
 		   to warn in lower dialects here because we will have already
 		   warned about the template parameter.  */;
@@ -28119,7 +28191,7 @@ cp_parser_template_declaration_after_parameters (cp_parser* parser,
 	      tree type = INNERMOST_TEMPLATE_PARMS (parm_type);
 	      tree parm_list = TREE_VEC_ELT (parameter_list, 1);
 	      tree parm = INNERMOST_TEMPLATE_PARMS (parm_list);
-	      if (parm == error_mark_node
+	      if (TREE_CODE (parm) != PARM_DECL
 		  || TREE_TYPE (parm) != TREE_TYPE (type)
 		  || !TEMPLATE_PARM_PARAMETER_PACK (DECL_INITIAL (parm)))
 		ok = false;
@@ -32580,6 +32652,8 @@ cp_parser_omp_clause_name (cp_parser *parser)
 	    result = PRAGMA_OMP_CLAUSE_UNTIED;
 	  else if (!strcmp ("use_device", p))
 	    result = PRAGMA_OACC_CLAUSE_USE_DEVICE;
+	  else if (!strcmp ("use_device_addr", p))
+	    result = PRAGMA_OMP_CLAUSE_USE_DEVICE_ADDR;
 	  else if (!strcmp ("use_device_ptr", p))
 	    result = PRAGMA_OMP_CLAUSE_USE_DEVICE_PTR;
 	  break;
@@ -35569,6 +35643,11 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
 					    clauses);
 	  c_name = "use_device_ptr";
 	  break;
+	case PRAGMA_OMP_CLAUSE_USE_DEVICE_ADDR:
+	  clauses = cp_parser_omp_var_list (parser, OMP_CLAUSE_USE_DEVICE_ADDR,
+					    clauses);
+	  c_name = "use_device_addr";
+	  break;
 	case PRAGMA_OMP_CLAUSE_IS_DEVICE_PTR:
 	  clauses = cp_parser_omp_var_list (parser, OMP_CLAUSE_IS_DEVICE_PTR,
 					    clauses);
@@ -36632,7 +36711,7 @@ cp_parser_omp_for_cond (cp_parser *parser, tree decl, enum tree_code code)
 	  || CLASS_TYPE_P (TREE_TYPE (decl))))
     return cond;
 
-  return build_x_binary_op (cp_expr_loc_or_loc (cond, input_location),
+  return build_x_binary_op (cp_expr_loc_or_input_loc (cond),
 			    TREE_CODE (cond),
 			    TREE_OPERAND (cond, 0), ERROR_MARK,
 			    TREE_OPERAND (cond, 1), ERROR_MARK,
@@ -37390,7 +37469,8 @@ cp_parser_omp_for_loop (cp_parser *parser, enum tree_code code, tree clauses,
 	real_decl = decl;
       if (cclauses != NULL
 	  && cclauses[C_OMP_CLAUSE_SPLIT_PARALLEL] != NULL
-	  && real_decl != NULL_TREE)
+	  && real_decl != NULL_TREE
+	  && code != OMP_LOOP)
 	{
 	  tree *c;
 	  for (c = &cclauses[C_OMP_CLAUSE_SPLIT_PARALLEL]; *c ; )
@@ -37450,12 +37530,12 @@ cp_parser_omp_for_loop (cp_parser *parser, enum tree_code code, tree clauses,
 	    }
 	  if (c == NULL)
 	    {
-	      if (code != OMP_SIMD)
-		c = build_omp_clause (loc, OMP_CLAUSE_PRIVATE);
-	      else if (collapse == 1)
-		c = build_omp_clause (loc, OMP_CLAUSE_LINEAR);
-	      else
+	      if ((code == OMP_SIMD && collapse != 1) || code == OMP_LOOP)
 		c = build_omp_clause (loc, OMP_CLAUSE_LASTPRIVATE);
+	      else if (code != OMP_SIMD)
+		c = build_omp_clause (loc, OMP_CLAUSE_PRIVATE);
+	      else
+		c = build_omp_clause (loc, OMP_CLAUSE_LINEAR);
 	      OMP_CLAUSE_DECL (c) = add_private_clause;
 	      c = finish_omp_clauses (c, C_ORT_OMP);
 	      if (c)
@@ -38646,7 +38726,8 @@ cp_parser_omp_teams (cp_parser *parser, cp_token *pragma_tok,
 	( (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_DEVICE)	\
 	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_MAP)		\
 	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_IF)		\
-	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_USE_DEVICE_PTR))
+	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_USE_DEVICE_PTR) \
+	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_USE_DEVICE_ADDR))
 
 static tree
 cp_parser_omp_target_data (cp_parser *parser, cp_token *pragma_tok, bool *if_p)
@@ -38682,7 +38763,8 @@ cp_parser_omp_target_data (cp_parser *parser, cp_token *pragma_tok, bool *if_p)
 	    *pc = OMP_CLAUSE_CHAIN (*pc);
 	    continue;
 	  }
-      else if (OMP_CLAUSE_CODE (*pc) == OMP_CLAUSE_USE_DEVICE_PTR)
+      else if (OMP_CLAUSE_CODE (*pc) == OMP_CLAUSE_USE_DEVICE_PTR
+	       || OMP_CLAUSE_CODE (*pc) == OMP_CLAUSE_USE_DEVICE_ADDR)
 	map_seen = 3;
       pc = &OMP_CLAUSE_CHAIN (*pc);
     }
@@ -38692,7 +38774,8 @@ cp_parser_omp_target_data (cp_parser *parser, cp_token *pragma_tok, bool *if_p)
       if (map_seen == 0)
 	error_at (pragma_tok->location,
 		  "%<#pragma omp target data%> must contain at least "
-		  "one %<map%> or %<use_device_ptr%> clause");
+		  "one %<map%>, %<use_device_ptr%> or %<use_device_addr%> "
+		  "clause");
       return NULL_TREE;
     }
 

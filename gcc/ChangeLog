@@ -1,3 +1,378 @@
+2019-08-08  Martin Liska  <mliska@suse.cz>
+
+	PR bootstrap/91352
+	* gcc.c (driver::detect_jobserver): Use is_valid_fd.
+	* lto-wrapper.c (jobserver_active_p): Likewise.
+
+2019-08-08  Martin Liska  <mliska@suse.cz>
+
+	* cgraphclones.c (set_new_clone_decl_and_node_flags): Drop
+	IS_OPERATOR_NEW and IS_OPERATOR_DELETE.
+	(create_version_clone_with_body): Likewise.
+
+2019-08-08  Jakub Jelinek  <jakub@redhat.com>
+
+	* gimplify.c (omp_add_variable): Use GOVD_PRIVATE | GOVD_EXPLICIT
+	for VLA helper variables on target data even if not GOVD_FIRSTPRIVATE.
+	(gimplify_scan_omp_clauses): For OMP_CLAUSE_USE_DEVICE_* use just
+	GOVD_EXPLICIT flags.
+	(gimplify_omp_workshare): For OMP_TARGET_DATA move all
+	OMP_CLAUSE_USE_DEVICE_* clauses to the end of clauses chain.
+	* omp-low.c (scan_sharing_clauses): For OMP_CLAUSE_USE_DEVICE_*
+	call install_var_field with mask 11 instead of 3.
+	(lower_omp_target): For OMP_CLAUSE_USE_DEVICE_* use pass
+	(splay_tree_key) &DECL_UID (var) to build_sender_ref instead of var.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/constraints.md (Z): Handle floating-point zeros too.
+	* config/aarch64/predicates.md (aarch64_reg_or_zero): Likewise.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64-sve.md (vec_shl_insert_<mode>): Add
+	MOVPRFX alternatives.  Make the GPR alternatives more expensive
+	than the FPR ones.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64-sve.md (fold_extract_last_<mode>):
+	Disparage the GPR alternative relative to the FPR one.
+	Fix handling of 8-bit and 16-bit FPR values.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/iterators.md (BITWISEV): Delete.
+	(SVE_INT_REDUCTION, SVE_FP_REDUCTION): New int iterators.
+	(optab): Handle UNSPEC_UMAXV, UNSPEC_UMINV, UNSPEC_SMAXV,
+	UNSPEC_SMINV, UNSPEC_FADDV, UNSPEC_FMAXNMV, UNSPEC_FMAXV,
+	UNSPEC_FMINNMV, UNSPEC_FMINV.
+	(bit_reduc_op): Delete.
+	(sve_int_op): New int attribute.
+	(sve_fp_op): Handle UNSPEC_FADDV, UNSPEC_FMAXNMV, UNSPEC_FMAXV,
+	UNSPEC_FMINNMV, UNSPEC_FMINV.
+	* config/aarch64/aarch64-sve.md
+	(reduc_<MAXMINV:maxmin_uns>_scal_<SVE_I:mode>)
+	(*reduc_<MAXMINV:maxmin_uns>_scal_<SVE_I:mode>)
+	(reduc_<BITWISEV:optab>_scal_<SVE_I:mode>)
+	(*reduc_<BITWISEV:optab>_scal_<SVE_I:mode>): Merge into...
+	(reduc_<SVE_INT_REDUCTION:optab>_scal_<SVE_I:mode>)
+	(*reduc_<SVE_INT_REDUCTION:optab>_scal_<SVE_I:mode>): ...these
+	new patterns.
+	(reduc_plus_scal_<SVE_F:mode>, *reduc_plus_scal_<SVE_I:mode>)
+	(reduc_<FMAXMINV:optab>_scal_<SVE_F:mode>)
+	(*reduc_<FMAXMINV:optab>_scal_<SVE_F:mode>): Merge into...
+	(reduc_<SVE_FP_REDUCTION:optab>_scal_<SVE_F:mode>)
+	(*reduc_<SVE_FP_REDUCTION:optab>_scal_<SVE_F:mode>): ...these
+	new patterns.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64-sve.md (fma<mode>4, *fma<mode>4)
+	(fnma<mode>4, *fnma<mode>4, fnms<mode>4, *fnms<mode>4)
+	(fms<mode>4, *fms<mode>4): Replace with...
+	(<SVE_COND_FP_TERNARY:optab><SVE_F:mode>4)
+	(*<SVE_COND_FP_TERNARY:optab><SVE_F:mode>4): ...these new patterns.
+	Use unspecs instead of rtx codes.
+	(cond_<optab><mode>, *cond_<optab><mode>_2, *cond_<optab><mode>_4)
+	(*cond_<optab><mode>_any): Add the predicate to SVE_COND_FP_TERNARY.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/iterators.md (SVE_COND_FP_MAXMIN_PUBLIC): New
+	int iterator.
+	(maxmin_uns_op): Handle UNSPEC_COND_FMAXNM and UNSPEC_COND_FMINNM.
+	* config/aarch64/aarch64-sve.md
+	(<FMAXMIN:su><FMAXMIN:maxmin><SVE_F:mode>3): Rename to...
+	(<SVE_COND_FP_MAXMIN_PUBLIC:optab><SVE_F:mode>3): ...this and
+	use a single unspec for the rhs.
+	(*<su><maxmin><mode>3): Delete.
+	(<maxmin_uns><SVE_F:mode>3): Use a single unspec for the rhs.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/iterators.md (UNSPEC_COND_FABS, UNSPEC_COND_FNEG)
+	(UNSPEC_COND_FRINTA, UNSPEC_COND_FRINTI, UNSPEC_COND_FRINTM)
+	(UNSPEC_COND_FRINTN, UNSPEC_COND_FRINTP, UNSPEC_COND_FRINTX)
+	(UNSPEC_COND_FRINTZ, UNSPEC_COND_FSQRT): New unspecs.
+	(optab, sve_fp_op): Handle them.
+	(SVE_FP_UNARY): Delete.
+	(optab): Remove sqrt entry.
+	(sve_fp_op): Remove neg, abs and sqrt entries.
+	(SVE_COND_FP_UNARY): New int iterator.
+	* config/aarch64/aarch64-sve.md (<frint_pattern><mode>2)
+	(*<frint_pattern><mode>2): Delete.
+	(<SVE_FP_UNARY:optab><SVE_F:mode>2): Replace with...
+	(<SVE_COND_FP_UNARY:optab><SVE_F:mode>2): ...this.
+	(*<SVE_FP_UNARY:optab><SVE_F:mode>2): Replace with...
+	(*<SVE_COND_FP_UNARY:optab><SVE_F:mode>2): ...this.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64-sve.md (*pred_fold_left_plus_<mode>): Delete.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/iterators.md (UNSPEC_COND_ADD): Rename to...
+	(UNSPEC_COND_FADD): ...this.
+	(UNSPEC_COND_SUB): Rename to...
+	(UNSPEC_COND_FSUB): ...this.
+	(UNSPEC_COND_MUL): Rename to...
+	(UNSPEC_COND_FMUL): ...this.
+	(UNSPEC_COND_DIV): Rename to...
+	(UNSPEC_COND_FDIV): ...this.
+	(UNSPEC_COND_MAX): Rename to...
+	(UNSPEC_COND_FMAXNM): ...this.
+	(UNSPEC_COND_MIN): Rename to...
+	(UNSPEC_COND_FMINNM): ...this.
+	(UNSPEC_COND_LT): Rename to...
+	(UNSPEC_COND_FCMLT): ...this.
+	(UNSPEC_COND_LE): Rename to...
+	(UNSPEC_COND_FCMLE): ...this.
+	(UNSPEC_COND_EQ): Rename to...
+	(UNSPEC_COND_FCMEQ): ...this.
+	(UNSPEC_COND_NE): Rename to...
+	(UNSPEC_COND_FCMNE): ...this.
+	(UNSPEC_COND_GE): Rename to...
+	(UNSPEC_COND_FCMGE): ...this.
+	(UNSPEC_COND_GT): Rename to...
+	(UNSPEC_COND_FCMGT): ...this.
+	(SVE_COND_FP_BINARY, SVE_COND_FP_CMP, optab, cmp_op, sve_fp_op)
+	(sve_fp_op_rev): Update accordingly.
+	* config/aarch64/aarch64.c (aarch64_unspec_cond_code): Likewise.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64-sve.md: Reorganize contents and add
+	banner comments.
+	* config/aarch64/check-sve-md.awk: New file.
+	* config/aarch64/t-aarch64 (s-check-sve-md): New rule.
+	(insn-conditions.md): Depend on it.
+
+2019-08-07  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/91385
+	* config/i386/sse.md (*negsi2_1_zext): Simplify insn pattern.
+	(*negsi2_cmpz_zext): Ditto.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/iterators.md (commutative): Remove.
+
+2019-08-07  Richard Earnshaw  <rearnsha@arm.com>
+
+	PR driver/91130
+	* lto-wrapper.c (find_and_merge_options): Use CL_DRIVER when
+	processing COLLECT_GCC_OPTIONS.
+	(run_gcc): Likewise.
+
+2019-08-07  Bernd Edlinger  <bernd.edlinger@hotmail.de>
+
+	PR tree-optimization/91109
+	* lra-remat.c (update_scratch_ops): Remove assignment of the
+	hard register.
+
+2019-08-07  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* data-streamer.h (streamer_write_poly_uint64): Declare.
+	(streamer_read_poly_uint64): Likewise.
+	* data-streamer-in.c (streamer_read_poly_uint64): New function.
+	* data-streamer-out.c (streamer_write_poly_uint64): Likewise.
+	* ipa-predicate.h (condition::size): Turn into a poly_int64.
+	(add_condition): Take a poly_int64 size.
+	* ipa-predicate.c (add_condition): Likewise.
+	* ipa-prop.h (ipa_load_from_parm_agg): Take a poly_int64 size pointer.
+	* ipa-prop.c (ipa_load_from_parm_agg): Likewise.
+	(ipcp_modif_dom_walker::before_dom_children): Update accordingly.
+	* ipa-fnsummary.c (evaluate_conditions_for_known_args): Handle
+	condition::size as a poly_int64.
+	(unmodified_parm_1): Take a poly_int64 size pointer.
+	(unmodified_parm): Likewise.
+	(unmodified_parm_or_parm_agg_item): Likewise.
+	(set_cond_stmt_execution_predicate): Update accordingly.
+	(set_switch_stmt_execution_predicate): Likewise.
+	(will_be_nonconstant_expr_predicate): Likewise.
+	(will_be_nonconstant_predicate): Likewise.
+	(inline_read_section): Stream condition::size as a poly_int.
+	(ipa_fn_summary_write): Likewise.
+
+2019-08-07  Martin Liska  <mliska@suse.cz>
+
+	* fold-const.c (twoval_comparison_p): Replace int
+	with bool as a return type.
+	(simple_operand_p): Likewise.
+	(operand_equal_p): Replace int with bool as a return type.
+	* fold-const.h (operand_equal_p): Likewise.
+
+2019-08-07  Jakub Jelinek  <jakub@redhat.com>
+
+	* tree-core.h (enum omp_clause_code): Adjust OMP_CLAUSE_USE_DEVICE_PTR
+	OpenMP description.  Add OMP_CLAUSE_USE_DEVICE_ADDR clause.
+	* tree.c (omp_clause_num_ops, omp_clause_code_name): Add entries
+	for OMP_CLAUSE_USE_DEVICE_ADDR clause.
+	(walk_tree_1): Handle OMP_CLAUSE_USE_DEVICE_ADDR.
+	* tree-pretty-print.c (dump_omp_clause): Likewise.
+	* tree-nested.c (convert_nonlocal_omp_clauses,
+	convert_local_omp_clauses): Likewise.
+	* gimplify.c (gimplify_scan_omp_clauses, gimplify_adjust_omp_clauses):
+	Likewise.
+	* omp-low.c (scan_sharing_clauses, lower_omp_target): Likewise.
+	Treat OMP_CLAUSE_USE_DEVICE_ADDR like OMP_CLAUSE_USE_DEVICE_PTR
+	clause with array or reference to array types, no matter what type
+	except for reference it has.
+
+2019-08-07  Kewen Lin  <linkw@gcc.gnu.org>
+
+	* config/rs6000/vector.md (vrotr<mode>3): New define_expand.
+
+2019-08-07  Kito Cheng  <kito.cheng@sifive.com>
+
+	* gcc/config/riscv/multilib-generator: (canonical_order): Add 'g'.
+	(arch_canonicalize): Support rv32g and rv64g and fix error
+	handling.
+
+2019-08-06  Martin Liska  <mliska@suse.cz>
+
+	* cgraph.c (cgraph_node::dump): Dump DECL_IS_OPERATOR_NEW_P
+	and DECL_IS_OPERATOR_DELETE_P.
+
+2019-08-06  Jakub Jelinek  <jakub@redhat.com>
+
+	* tree.h (OMP_CLAUSE_LASTPRIVATE_TASKLOOP_IV): Rename to ...
+	(OMP_CLAUSE_LASTPRIVATE_LOOP_IV): ... this.  Adjust comment.
+	* gimplify.c (gimple_add_tmp_var): In SIMD contexts, turn addressable
+	new vars into GOVD_PRIVATE rather than GOVD_LOCAL.
+	(gimplify_omp_for): Don't do C++ random access iterator clause
+	adjustments on combined constructs from OMP_LOOP.  For OMP_LOOP,
+	don't predetermine the artificial iterator in case of C++ random
+	access iterators as lastprivate, but private.  For OMP_LOOP, force
+	bind expr around simd body and force for_pre_body before the
+	construct.  Use OMP_CLAUSE_LASTPRIVATE_LOOP_IV instead of
+	OMP_CLAUSE_LASTPRIVATE_TASKLOOP_IV.
+	(gimplify_omp_loop): Add firstprivate clauses on OMP_PARALLEL for
+	diff var of C++ random access iterators.  Handle
+	OMP_CLAUSE_FIRSTPRIVATE.  For OMP_CLAUSE_LASTPRIVATE_LOOP_IV, if
+	not outermost also add OMP_CLAUSE_FIRSTPRIVATE, and in both cases
+	clear OMP_CLAUSE_LASTPRIVATE_LOOP_IV on the lastprivate clause
+	on the OMP_FOR and OMP_DISTRIBUTE constructs if any.
+	* omp-low.c (lower_rec_input_clauses): For
+	OMP_CLAUSE_LASTPRIVATE_LOOP_IV on simd copy construct the private
+	variables instead of default constructing them.
+	(lower_lastprivate_clauses): Use OMP_CLAUSE_LASTPRIVATE_LOOP_IV
+	instead of OMP_CLAUSE_LASTPRIVATE_TASKLOOP_IV and move the
+	is_taskloop_ctx check from the assert to the guarding condition.
+
+2019-08-06  Kito Cheng  <kito.cheng@sifive.com>
+
+	* gcc/config/riscv/multilib-generator: (canonical_order): New.
+	(arch_canonicalize): Dito.
+	Apply arch_canonicalize for alts.
+
+2019-08-05  Martin Sebor  <msebor@redhat.com>
+
+	* doc/extend.texi (Common Variable Attributes): Document alias
+	attribute.
+
+2019-08-05  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/91338 - Implement P1161R3: Deprecate a[b,c].
+	* doc/invoke.texi: Document -Wcomma-subscript.
+
+2019-08-05  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* tree-core.h (tree_function_decl): Make function_code an
+	independent field.  Group the remaining bitfields into bytes
+	and move decl_type so that it contines to be at a byte boundary.
+	Leave 12 bits for future expansion.
+
+2019-08-05  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gimple-fold.c (gimple_fold_mask_load_store_mem_ref)
+	(gimple_fold_mask_load, gimple_fold_mask_store): New functions.
+	(gimple_fold_call): Use them to fold IFN_MASK_LOAD and
+	IFN_MASK_STORE.
+
+2019-08-05  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gimple.h (gimple_move_vops): Declare.
+	* gimple.c (gimple_move_vops): New function
+	* gimple-fold.c (replace_call_with_call_and_fold)
+	(gimple_fold_builtin_memory_op, gimple_fold_builtin_memset)
+	(gimple_fold_builtin_stpcpy, fold_builtin_atomic_compare_exchange)
+	(gimple_fold_call): Use it.
+	* ipa-param-manipulation.c (ipa_modify_call_arguments): Likewise.
+	* tree-call-cdce.c (use_internal_fn): Likewise.
+	* tree-if-conv.c (predicate_load_or_store): Likewise.
+	* tree-ssa-ccp.c (optimize_atomic_bit_test_and): Likewise.
+	* tree-ssa-math-opts.c (pass_cse_reciprocals::execute): Likewise.
+	* tree-ssa-propagate.c (finish_update_gimple_call): Likewise.
+	(update_call_from_tree): Likewise.
+	* tree-vect-stmts.c (vectorizable_load): Likewise.
+	* tree-vectorizer.c (adjust_simduid_builtins): Likewise.
+
+2019-08-05  Martin Liska  <mliska@suse.cz>
+
+	PR c++/91334
+	* tree-ssa-dce.c (propagate_necessity): Handle new operators
+	with not arguments.
+	(eliminate_unnecessary_stmts): Likewise.
+
+2019-08-05  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/91169
+	* fold-const.c (get_array_ctor_element_at_index): Create
+	offset_ints according to the sign of the index type and treat
+	that as signed if it is obviously so.
+
+2019-08-05  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/91341
+	* config/i386/avxintrin.h (_mm256_loadu2_m128, _mm256_storeu2_m128,
+	_mm256_loadu2_m128d, _mm256_storeu2_m128d, _mm256_loadu2_m128i,
+	_mm256_storeu2_m128i): New function.
+
+2019-08-05  Kito Cheng  <kito.cheng@sifive.com>
+
+	* config/riscv/riscv.c (riscv_promote_function_mode): New.
+	(TARGET_PROMOTE_FUNCTION_MODE): Use riscv_promote_function_mode.
+
+2019-08-05  Alan Modra  <amodra@gmail.com>
+
+	PR target/91349
+	* config/rs6000/freebsd64.h (CPLUSPLUS_CPP_SPEC),
+	(LINK_GCC_C_SEQUENCE_SPEC): Undef.
+
+2019-08-04  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* doc/install.texi (Prerequisites): Remove reference to Tcl 8.6
+	bug that was fixed in Tcl 8.6.1.
+
+2019-08-02  Michael Meissner  <meissner@linux.ibm.com>
+
+	* config/rs6000/future.md: New file.
+	* config/rs6000/rs6000.md: Include future.md.
+	* config/rs6000/t-rs6000 (MD_INCLUDES): Add future.md.
+
+2019-08-02  Bernd Edlinger  <bernd.edlinger@hotmail.de>
+
+	* function.c (assign_parm_adjust_stack_rtl): Revise STRICT_ALIGNMENT
+	check to use targetm.slow_unaligned_access instead.
+
+	* function.c (assign_param_data_one): Remove unused data members.
+
+2019-08-02  Steve Ellcey  <sellcey@marvell.com>
+
+	* omp-simd-clone.c (simd_clone_adjust_return_type): Remove call to
+	build_distinct_type_copy.
+	(simd_clone_adjust_argument_types): Ditto.
+	(simd_clone_adjust): Call build_distinct_type_copy here.
+	(expand_simd_clones): Ditto.
+
+2019-08-02  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/91201
+	* config/i386/sse.md (*vec_extractv16qi_zext): New insn pattern.
+
 2019-08-02  Alexander Monakov  <amonakov@ispras.ru>
 
 	* tree-ssa-loop-im.c (sort_bbs_in_loop_postorder_cmp): Simplify casts

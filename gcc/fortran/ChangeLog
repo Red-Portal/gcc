@@ -1,3 +1,42 @@
+2019-08-06  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91359
+	* trans-decl.c (gfc_generate_return): Ensure something is returned
+	from a function.
+
+2019-08-06  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/42546
+	* check.c(gfc_check_allocated): Add comment pointing to ...
+ 	* intrinsic.c(sort_actual): ... the checking done here.
+ 
+2019-08-05  Steven g. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91372
+	* decl.c (gfc_match_data): Allow an implied do-loop to nestle against
+	DATA.
+
+2019-08-04  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/88227
+	* check.c (oct2bin):  New function.  Convert octal string to binary.
+	(hex2bin): New function.  Convert hexidecimal string to binary.
+	(bin2real): New function.  Convert binary string to REAL.  Use
+	oct2bin and hex2bin.
+	(gfc_boz2real):  Use fallback conversion bin2real.
+
+2019-08-02  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/90985
+	* decl.c (gfc_match_data): In free-form code, DATA be followed by
+	whitespace.
+
+2019-08-02  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/90986
+	* match.c (gfc_match_equivalence): Check that EQUIVALENCE is followed
+	by '('.
+
 2019-07-30  Steven G. Kargl  <kargl@gcc.gnu.org>
 
 	PR fortran/91296
