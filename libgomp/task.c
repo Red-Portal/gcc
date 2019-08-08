@@ -427,11 +427,14 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    }
 	}
 
+      /* task count increment must come first */
       gomp_mutex_lock (&team->task_lock);
+      __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
+
       if (taskgroup)
-	__atomic_add_fetch(&taskgroup->num_children, 1, MEMMODEL_ACQ_REL);
-      __atomic_add_fetch(&parent->num_children, 1, MEMMODEL_ACQ_REL);
-      __atomic_add_fetch(&team->task_count, 1, MEMMODEL_ACQ_REL);
+	__atomic_add_fetch (&taskgroup->num_children, 1, MEMMODEL_ACQ_REL);
+      __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
+      __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
 
       if (depend_size)
 	{
@@ -454,7 +457,6 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 			     PRIORITY_INSERT_END,
 			     /*adjust_parent_depends_on=*/false,
 			     task->parent_depends_on);
-      ++team->task_queued_count;
       gomp_mutex_unlock (&team->task_lock);
       gomp_team_barrier_set_task_pending (&team->barrier);
       do_wake = __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
@@ -696,12 +698,14 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
       gomp_task_handle_depend (task, parent, depend);
       if (task->num_dependees)
 	{
+	  gomp_mutex_unlock (&team->task_lock);
+	  /* task count increment must come first */
+	  __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
+
 	  if (taskgroup)
 	    __atomic_add_fetch (&taskgroup->num_children, 1,
 				MEMMODEL_ACQ_REL);
 	  __atomic_add_fetch (&parent->num_children, 1,	MEMMODEL_ACQ_REL);
-	  __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
-	  gomp_mutex_unlock (&team->task_lock);
 	  return true;
 	}
     }
@@ -713,16 +717,18 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
       free (task);
       return false;
     }
+  //gomp_mutex_unlock (&team->task_lock);
 
-  /* For async offloading, if we don't need to wait for dependencies,
-     run the gomp_target_task_fn right away, essentially schedule the
-     mapping part of the task in the current thread.  */
-
+  __atomic_add_fetch(&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
   if (taskgroup)
     __atomic_add_fetch (&taskgroup->num_children, 1, MEMMODEL_ACQ_REL);
   __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
   __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
+  //gomp_mutex_lock (&team->task_lock);
 
+  /* For async offloading, if we don't need to wait for dependencies,
+     run the gomp_target_task_fn right away, essentially schedule the
+     mapping part of the task in the current thread.  */
   if (devicep != NULL
       && (devicep->capabilities & GOMP_OFFLOAD_CAP_OPENMP_400))
     {
@@ -749,7 +755,6 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
   priority_queue_insert (&team->task_queue, task, 0, PRIORITY_INSERT_END,
 			 /*adjust_parent_depends_on=*/false,
 			 task->parent_depends_on);
-  ++team->task_queued_count;
   gomp_mutex_unlock (&team->task_lock);
 
   gomp_team_barrier_set_task_pending (&team->barrier);
@@ -774,7 +779,7 @@ gomp_task_run_pre (struct gomp_task *task, struct gomp_team *team)
   task->pnode.prev = NULL;
   task->kind = GOMP_TASK_TIED;
 
-  if (--team->task_queued_count == 0)
+  if (__atomic_sub_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL) == 0)
     gomp_team_barrier_clear_task_pending (&team->barrier);
   if (__builtin_expect (gomp_cancel_var, 0) && !task->copy_ctors_done)
     {
@@ -846,11 +851,12 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
       if (--task->num_dependees != 0)
 	continue;
 
+      __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
+
       priority_queue_insert (&team->task_queue, task, task->priority,
 			     PRIORITY_INSERT_END,
 			     /*adjust_parent_depends_on=*/false,
 			     task->parent_depends_on);
-      ++team->task_queued_count;
 
       struct gomp_taskgroup *taskgroup = task->taskgroup;
       if (parent)
@@ -923,7 +929,8 @@ gomp_task_run_post_remove_parent (struct gomp_task *child_task)
      synchronize with gomp_task_maybe_wait_for_dependencies so it can
      clean up and return.  */
   if (__builtin_expect (child_task->parent_depends_on, 0)
-      && --parent->taskwait->n_depend == 0
+      && __atomic_sub_fetch (&parent->taskwait->n_depend, 1,
+			     MEMMODEL_ACQ_REL) == 0
       && __atomic_exchange_n (&parent->taskwait->in_depend_wait, false,
 			      MEMMODEL_ACQ_REL))
     {
@@ -987,9 +994,9 @@ gomp_execute_task (struct gomp_team *team, struct gomp_thread *thr,
   struct gomp_task *next_task = NULL;
 
 #if _LIBGOMP_CHECKING_
-  if (priority_queue_empty_p (&team->task_queue, MEMMODEL_ACQUIRE)
-      && __atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) != 0)
-    gomp_fatal ("Queue empty while number of queued tasks is nonzero.");
+  /* if (priority_queue_empty_p (&team->task_queue, MEMMODEL_ACQUIRE) */
+  /*     && __atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) != 0) */
+  /*   gomp_fatal ("Queue empty while number of queued tasks is nonzero."); */
 #endif
 
   if (priority_queue_empty_p (&team->task_queue, MEMMODEL_ACQUIRE))
@@ -1060,9 +1067,9 @@ gomp_execute_task (struct gomp_team *team, struct gomp_thread *thr,
       gomp_task_run_post_remove_taskgroup (next_task);
 
       to_free = next_task;
-      to_free->kind = GOMP_DONE;
+      __atomic_store_n (&to_free->kind, GOMP_DONE, MEMMODEL_RELEASE);
       next_task = NULL;
-      team->task_count--;
+      __atomic_sub_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
       if (new_tasks > 1)
 	{
 	  do_wake
@@ -1071,7 +1078,7 @@ gomp_execute_task (struct gomp_team *team, struct gomp_thread *thr,
 	    do_wake = new_tasks;
 	}
     }
-  if (to_free && to_free->num_children == 0)
+  if (to_free && __atomic_load_n (&to_free->num_children, 0, MEMMODEL_ACQUIRE))
     {
       gomp_finish_task (to_free);
       free (to_free);
@@ -1106,7 +1113,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
   while (true)
     {
       bool cancelled = false;
-      if (!priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
+      if (!priority_queue_empty_p (&team->task_queue, MEMMODEL_ACQUIRE))
 	{
 	  child_task = priority_queue_next_task (&team->task_queue);
 	  cancelled = gomp_task_run_pre (child_task, team);
@@ -1122,8 +1129,21 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 		}
 	      goto finish_cancelled;
 	    }
-	  team->task_running_count++;
-	  child_task->in_tied_task = true;
+	  __atomic_add_fetch (&team->task_running_count, 1,
+			      MEMMODEL_ACQ_REL);
+	  __atomic_store_n (&child_task->in_tied_task, true,
+			    MEMMODEL_RELEASE);
+	}
+      else 
+	{
+	    gomp_mutex_unlock (&team->task_lock);
+	    if (__atomic_load_n (&team->task_queued_count,
+				 MEMMODEL_RELAXED) != 0)
+	      {
+		gomp_mutex_lock (&team->task_lock);
+		continue;
+	      }
+	     gomp_mutex_lock (&team->task_lock);
 	}
       gomp_mutex_unlock (&team->task_lock);
       if (do_wake)
@@ -1176,7 +1196,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	  gomp_task_run_post_remove_parent (child_task);
 	  gomp_task_run_post_remove_taskgroup (child_task);
 	  to_free = child_task;
-	  to_free->kind = GOMP_DONE;
+	  __atomic_store_n (&to_free->kind, GOMP_DONE, MEMMODEL_RELEASE);
 	  child_task = NULL;
 	  if (!cancelled)
 	    team->task_running_count--;
@@ -1235,16 +1255,24 @@ GOMP_taskwait (void)
 	}
       if (!gomp_execute_task (team, thr, task))
 	{
-	  if (task->taskwait == NULL)
+	  if (__atomic_load_n (&team->task_queued_count,
+	  		       MEMMODEL_ACQUIRE) == 0)
 	    {
-	      taskwait.in_depend_wait = false;
-	      gomp_sem_init (&taskwait.taskwait_sem, 0);
-	      task->taskwait = &taskwait;
+	      gomp_mutex_unlock (&team->task_lock);
+	      if (task->taskwait == NULL)
+	  	{
+	  	  taskwait.in_depend_wait = false;
+	  	  gomp_sem_init (&taskwait.taskwait_sem, 0);
+
+		  /* Taskwait is not accessed outsied before 
+		     in_taskwait is set */
+	  	  task->taskwait = &taskwait;
+	  	}
+	      __atomic_store_n (&taskwait.in_taskwait, true,
+				MEMMODEL_RELEASE);
+	      gomp_sem_wait (&taskwait.taskwait_sem);
+	      gomp_mutex_lock (&team->task_lock);
 	    }
-	  __atomic_store_n (&taskwait.in_taskwait, true, MEMMODEL_RELEASE);
-	  gomp_mutex_unlock (&team->task_lock);
-	  gomp_sem_wait (&taskwait.taskwait_sem);
-	  gomp_mutex_lock (&team->task_lock);
 	}
     }
 }
@@ -1265,13 +1293,13 @@ GOMP_taskwait_depend (void **depend)
 	return;
       if (thr->task->taskgroup)
 	{
-	  if (__atomic_load_n(&thr->task->taskgroup->cancelled,
-			      MEMMODEL_ACQUIRE))
+	  if (__atomic_load_n (&thr->task->taskgroup->cancelled,
+			       MEMMODEL_ACQUIRE))
 	    return;
 	  if (thr->task->taskgroup->workshare
 	      && thr->task->taskgroup->prev
-	      && __atomic_load_n(&thr->task->taskgroup->prev->cancelled,
-				 MEMMODEL_ACQUIRE))
+	      && __atomic_load_n (&thr->task->taskgroup->prev->cancelled,
+				  MEMMODEL_ACQUIRE))
 	    return;
 	}
     }
@@ -1379,9 +1407,13 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 
       if (!gomp_execute_task (team, thr, task))
 	{
-	  taskwait.in_depend_wait = true;
 	  gomp_mutex_unlock (&team->task_lock);
-	  gomp_sem_wait (&taskwait.taskwait_sem);
+	  if (__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) == 0)
+	    {
+	      __atomic_store_n (&taskwait.in_depend_wait, true,
+				MEMMODEL_RELEASE);
+	      gomp_sem_wait (&taskwait.taskwait_sem);
+	    }
 	  gomp_mutex_lock (&team->task_lock);
 	}
     }
@@ -1467,9 +1499,14 @@ GOMP_taskgroup_end (void)
 	}
       if (!gomp_execute_task (team, thr, task))
 	{
-	  taskgroup->in_taskgroup_wait = true;
 	  gomp_mutex_unlock (&team->task_lock);
-	  gomp_sem_wait (&taskgroup->taskgroup_sem);
+	  if (__atomic_load_n (&team->task_queued_count,
+	  		       MEMMODEL_ACQUIRE) == 0)
+	    {
+	      __atomic_store_n (&taskgroup->in_taskgroup_wait, true,
+	  			MEMMODEL_RELEASE);
+	      gomp_sem_wait (&taskgroup->taskgroup_sem);
+	    }
 	  gomp_mutex_lock (&team->task_lock);
 	}
     }
