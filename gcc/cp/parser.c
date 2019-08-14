@@ -32510,6 +32510,8 @@ cp_parser_omp_clause_name (cp_parser *parser)
 	    result = PRAGMA_OACC_CLAUSE_DEVICEPTR;
 	  else if (!strcmp ("device_resident", p))
 	    result = PRAGMA_OACC_CLAUSE_DEVICE_RESIDENT;
+	  else if (!strcmp ("device_type", p))
+	    result = PRAGMA_OMP_CLAUSE_DEVICE_TYPE;
 	  else if (!strcmp ("dist_schedule", p))
 	    result = PRAGMA_OMP_CLAUSE_DIST_SCHEDULE;
 	  break;
@@ -32684,14 +32686,8 @@ static void
 check_no_duplicate_clause (tree clauses, enum omp_clause_code code,
 			   const char *name, location_t location)
 {
-  tree c;
-
-  for (c = clauses; c ; c = OMP_CLAUSE_CHAIN (c))
-    if (OMP_CLAUSE_CODE (c) == code)
-      {
-	error_at (location, "too many %qs clauses", name);
-	break;
-      }
+  if (omp_find_clause (clauses, code))
+    error_at (location, "too many %qs clauses", name);
 }
 
 /* OpenMP 2.5:
@@ -33581,8 +33577,8 @@ cp_parser_omp_clause_if (cp_parser *parser, tree list, location_t location,
 	      case OMP_TARGET_DATA: p = "target data"; break;
 	      case OMP_TARGET: p = "target"; break;
 	      case OMP_TARGET_UPDATE: p = "target update"; break;
-	      case OMP_TARGET_ENTER_DATA: p = "enter data"; break;
-	      case OMP_TARGET_EXIT_DATA: p = "exit data"; break;
+	      case OMP_TARGET_ENTER_DATA: p = "target enter data"; break;
+	      case OMP_TARGET_EXIT_DATA: p = "target exit data"; break;
 	      default: gcc_unreachable ();
 	      }
 	    error_at (location, "too many %<if%> clauses with %qs modifier",
@@ -35258,8 +35254,10 @@ cp_parser_omp_clause_dist_schedule (cp_parser *parser, tree list,
   else if (!cp_parser_require (parser, CPP_CLOSE_PAREN, RT_COMMA_CLOSE_PAREN))
     goto resync_fail;
 
-  check_no_duplicate_clause (list, OMP_CLAUSE_DIST_SCHEDULE, "dist_schedule",
-			     location);
+  /* check_no_duplicate_clause (list, OMP_CLAUSE_DIST_SCHEDULE,
+				"dist_schedule", location); */
+  if (omp_find_clause (list, OMP_CLAUSE_DIST_SCHEDULE))
+    warning_at (location, 0, "too many %qs clauses", "dist_schedule");
   OMP_CLAUSE_CHAIN (c) = list;
   return c;
 
@@ -35313,6 +35311,56 @@ cp_parser_omp_clause_proc_bind (cp_parser *parser, tree list,
   check_no_duplicate_clause (list, OMP_CLAUSE_PROC_BIND, "proc_bind",
 			     location);
   OMP_CLAUSE_PROC_BIND_KIND (c) = kind;
+  OMP_CLAUSE_CHAIN (c) = list;
+  return c;
+
+ invalid_kind:
+  cp_parser_error (parser, "invalid depend kind");
+ resync_fail:
+  cp_parser_skip_to_closing_parenthesis (parser, /*recovering=*/true,
+					 /*or_comma=*/false,
+					 /*consume_paren=*/true);
+  return list;
+}
+
+/* OpenMP 5.0:
+   device_type ( host | nohost | any )  */
+
+static tree
+cp_parser_omp_clause_device_type (cp_parser *parser, tree list,
+				  location_t location)
+{
+  tree c;
+  enum omp_clause_device_type_kind kind;
+
+  if (!cp_parser_require (parser, CPP_OPEN_PAREN, RT_OPEN_PAREN))
+    return list;
+
+  if (cp_lexer_next_token_is (parser->lexer, CPP_NAME))
+    {
+      tree id = cp_lexer_peek_token (parser->lexer)->u.value;
+      const char *p = IDENTIFIER_POINTER (id);
+
+      if (strcmp ("host", p) == 0)
+	kind = OMP_CLAUSE_DEVICE_TYPE_HOST;
+      else if (strcmp ("nohost", p) == 0)
+	kind = OMP_CLAUSE_DEVICE_TYPE_NOHOST;
+      else if (strcmp ("any", p) == 0)
+	kind = OMP_CLAUSE_DEVICE_TYPE_ANY;
+      else
+	goto invalid_kind;
+    }
+  else
+    goto invalid_kind;
+
+  cp_lexer_consume_token (parser->lexer);
+  if (!cp_parser_require (parser, CPP_CLOSE_PAREN, RT_COMMA_CLOSE_PAREN))
+    goto resync_fail;
+
+  c = build_omp_clause (location, OMP_CLAUSE_DEVICE_TYPE);
+  /* check_no_duplicate_clause (list, OMP_CLAUSE_DEVICE_TYPE, "device_type",
+				location);  */
+  OMP_CLAUSE_DEVICE_TYPE_KIND (c) = kind;
   OMP_CLAUSE_CHAIN (c) = list;
   return c;
 
@@ -35852,6 +35900,11 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
 	  clauses = cp_parser_omp_clause_proc_bind (parser, clauses,
 						    token->location);
 	  c_name = "proc_bind";
+	  break;
+	case PRAGMA_OMP_CLAUSE_DEVICE_TYPE:
+	  clauses = cp_parser_omp_clause_device_type (parser, clauses,
+						      token->location);
+	  c_name = "device_type";
 	  break;
 	case PRAGMA_OMP_CLAUSE_SAFELEN:
 	  clauses = cp_parser_omp_clause_safelen (parser, clauses,
@@ -39835,12 +39888,15 @@ cp_parser_late_parsing_omp_declare_simd (cp_parser *parser, tree attrs)
 
 #define OMP_DECLARE_TARGET_CLAUSE_MASK				\
 	( (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_TO)		\
-	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_LINK))
+	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_LINK)		\
+	| (OMP_CLAUSE_MASK_1 << PRAGMA_OMP_CLAUSE_DEVICE_TYPE))
 
 static void
 cp_parser_omp_declare_target (cp_parser *parser, cp_token *pragma_tok)
 {
   tree clauses = NULL_TREE;
+  int device_type = 0;
+  bool only_device_type = true;
   if (cp_lexer_next_token_is (parser->lexer, CPP_NAME))
     clauses
       = cp_parser_omp_all_clauses (parser, OMP_DECLARE_TARGET_CLAUSE_MASK,
@@ -39858,17 +39914,18 @@ cp_parser_omp_declare_target (cp_parser *parser, cp_token *pragma_tok)
       scope_chain->omp_declare_target_attribute++;
       return;
     }
-  if (scope_chain->omp_declare_target_attribute)
-    error_at (pragma_tok->location,
-	      "%<#pragma omp declare target%> with clauses in between "
-	      "%<#pragma omp declare target%> without clauses and "
-	      "%<#pragma omp end declare target%>");
+  for (tree c = clauses; c; c = OMP_CLAUSE_CHAIN (c))
+    if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_DEVICE_TYPE)
+      device_type |= OMP_CLAUSE_DEVICE_TYPE_KIND (c);
   for (tree c = clauses; c; c = OMP_CLAUSE_CHAIN (c))
     {
+      if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_DEVICE_TYPE)
+	continue;
       tree t = OMP_CLAUSE_DECL (c), id;
       tree at1 = lookup_attribute ("omp declare target", DECL_ATTRIBUTES (t));
       tree at2 = lookup_attribute ("omp declare target link",
 				   DECL_ATTRIBUTES (t));
+      only_device_type = false;
       if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_LINK)
 	{
 	  id = get_identifier ("omp declare target link");
@@ -39901,7 +39958,34 @@ cp_parser_omp_declare_target (cp_parser *parser, cp_token *pragma_tok)
 		}
 	    }
 	}
+      if (TREE_CODE (t) != FUNCTION_DECL)
+	continue;
+      if ((device_type & OMP_CLAUSE_DEVICE_TYPE_HOST) != 0)
+	{
+	  tree at3 = lookup_attribute ("omp declare target host",
+				       DECL_ATTRIBUTES (t));
+	  if (at3 == NULL_TREE)
+	    {
+	      id = get_identifier ("omp declare target host");
+	      DECL_ATTRIBUTES (t)
+		= tree_cons (id, NULL_TREE, DECL_ATTRIBUTES (t));
+	    }
+	}
+      if ((device_type & OMP_CLAUSE_DEVICE_TYPE_NOHOST) != 0)
+	{
+	  tree at3 = lookup_attribute ("omp declare target nohost",
+				       DECL_ATTRIBUTES (t));
+	  if (at3 == NULL_TREE)
+	    {
+	      id = get_identifier ("omp declare target nohost");
+	      DECL_ATTRIBUTES (t)
+		= tree_cons (id, NULL_TREE, DECL_ATTRIBUTES (t));
+	    }
+	}
     }
+  if (device_type && only_device_type)
+    warning_at (OMP_CLAUSE_LOCATION (clauses), 0,
+		"directive with only %<device_type%> clauses ignored");
 }
 
 static void

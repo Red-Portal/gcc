@@ -2824,7 +2824,7 @@ package body Sem_Ch13 is
                   Insert_Pragma (Aitem);
                   goto Continue;
 
-               --  Aspect Effecitve_Reads is never delayed because it is
+               --  Aspect Effective_Reads is never delayed because it is
                --  equivalent to a source pragma which appears after the
                --  related object declaration.
 
@@ -3014,6 +3014,19 @@ package body Sem_Ch13 is
                   Insert_Pragma (Aitem);
                   goto Continue;
 
+               --  Max_Entry_Queue_Length
+
+               when Aspect_Max_Entry_Queue_Length =>
+                  Make_Aitem_Pragma
+                    (Pragma_Argument_Associations => New_List (
+                       Make_Pragma_Argument_Association (Loc,
+                         Expression => Relocate_Node (Expr))),
+                     Pragma_Name => Name_Max_Entry_Queue_Length);
+
+                  Decorate (Aspect, Aitem);
+                  Insert_Pragma (Aitem);
+                  goto Continue;
+
                --  Max_Queue_Length
 
                when Aspect_Max_Queue_Length =>
@@ -3022,6 +3035,21 @@ package body Sem_Ch13 is
                        Make_Pragma_Argument_Association (Loc,
                          Expression => Relocate_Node (Expr))),
                      Pragma_Name                  => Name_Max_Queue_Length);
+
+                  Decorate (Aspect, Aitem);
+                  Insert_Pragma (Aitem);
+                  goto Continue;
+
+               --  Aspect No_Caching is never delayed because it is equivalent
+               --  to a source pragma which appears after the related object
+               --  declaration.
+
+               when Aspect_No_Caching =>
+                  Make_Aitem_Pragma
+                    (Pragma_Argument_Associations => New_List (
+                       Make_Pragma_Argument_Association (Loc,
+                         Expression => Relocate_Node (Expr))),
+                     Pragma_Name                  => Name_No_Caching);
 
                   Decorate (Aspect, Aitem);
                   Insert_Pragma (Aitem);
@@ -4625,10 +4653,12 @@ package body Sem_Ch13 is
          end if;
 
          if not Is_Overloaded (Expr) then
-            if not Check_Primitive_Function (Entity (Expr)) then
+            if Entity (Expr) /= Any_Id
+              and then not Check_Primitive_Function (Entity (Expr))
+            then
                Error_Msg_NE
                  ("aspect Indexing requires a function that applies to type&",
-                   Entity (Expr), Ent);
+                  Entity (Expr), Ent);
             end if;
 
             --  Flag the default_iterator as well as the denoted function.
@@ -9636,7 +9666,9 @@ package body Sem_Ch13 is
             | Aspect_Initial_Condition
             | Aspect_Initializes
             | Aspect_Max_Entry_Queue_Depth
+            | Aspect_Max_Entry_Queue_Length
             | Aspect_Max_Queue_Length
+            | Aspect_No_Caching
             | Aspect_Obsolescent
             | Aspect_Part_Of
             | Aspect_Post
@@ -11477,7 +11509,7 @@ package body Sem_Ch13 is
       if Align = No_Uint then
          return No_Uint;
 
-      elsif Align <= 0 then
+      elsif Align < 0 then
 
          --  This error is suppressed in ASIS mode to allow for different ASIS
          --  back ends or ASIS-based tools to query the illegal clause.
@@ -11487,6 +11519,11 @@ package body Sem_Ch13 is
          end if;
 
          return No_Uint;
+
+      --  If Alignment is specified to be 0, we treat it the same as 1
+
+      elsif Align = 0 then
+         return Uint_1;
 
       else
          for J in Int range 0 .. 64 loop

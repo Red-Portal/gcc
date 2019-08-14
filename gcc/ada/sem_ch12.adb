@@ -1025,26 +1025,6 @@ package body Sem_Ch12 is
       raise Instantiation_Error;
    end Abandon_Instantiation;
 
-   --------------------------------
-   --  Add_Pending_Instantiation --
-   --------------------------------
-
-   procedure Add_Pending_Instantiation (Inst : Node_Id; Act_Decl : Node_Id) is
-   begin
-      --  Capture the body of the generic instantiation along with its context
-      --  for later processing by Instantiate_Bodies.
-
-      Pending_Instantiations.Append
-        ((Act_Decl                 => Act_Decl,
-          Config_Switches          => Save_Config_Switches,
-          Current_Sem_Unit         => Current_Sem_Unit,
-          Expander_Status          => Expander_Active,
-          Inst_Node                => Inst,
-          Local_Suppress_Stack_Top => Local_Suppress_Stack_Top,
-          Scope_Suppress           => Scope_Suppress,
-          Warnings                 => Save_Warnings));
-   end Add_Pending_Instantiation;
-
    ----------------------------------
    -- Adjust_Inherited_Pragma_Sloc --
    ----------------------------------
@@ -3865,27 +3845,16 @@ package body Sem_Ch12 is
 
    procedure Analyze_Package_Instantiation (N : Node_Id) is
       Has_Inline_Always : Boolean := False;
-
-      procedure Delay_Descriptors (E : Entity_Id);
-      --  Delay generation of subprogram descriptors for given entity
+      --  Set if the generic unit contains any subprograms with Inline_Always.
+      --  Only relevant when back-end inlining is not enabled.
 
       function Might_Inline_Subp (Gen_Unit : Entity_Id) return Boolean;
       --  If inlining is active and the generic contains inlined subprograms,
-      --  we instantiate the body. This may cause superfluous instantiations,
-      --  but it is simpler than detecting the need for the body at the point
-      --  of inlining, when the context of the instance is not available.
-
-      -----------------------
-      -- Delay_Descriptors --
-      -----------------------
-
-      procedure Delay_Descriptors (E : Entity_Id) is
-      begin
-         if not Delay_Subprogram_Descriptors (E) then
-            Set_Delay_Subprogram_Descriptors (E);
-            Pending_Descriptor.Append (E);
-         end if;
-      end Delay_Descriptors;
+      --  we either instantiate the body when front-end inlining is enabled,
+      --  or we add a pending instantiation when back-end inlining is enabled.
+      --  In the former case, this may cause superfluous instantiations, but
+      --  in either case we need to perform the instantiation of the body in
+      --  the context of the instance and not in that of the point of inlining.
 
       -----------------------
       -- Might_Inline_Subp --
@@ -3895,10 +3864,14 @@ package body Sem_Ch12 is
          E : Entity_Id;
 
       begin
-         if not Inline_Processing_Required then
-            return False;
+         if Inline_Processing_Required then
+            --  No need to recompute the answer if we know it is positive
+            --  and back-end inlining is enabled.
 
-         else
+            if Is_Inlined (Gen_Unit) and then Back_End_Inlining then
+               return True;
+            end if;
+
             E := First_Entity (Gen_Unit);
             while Present (E) loop
                if Is_Subprogram (E) and then Is_Inlined (E) then
@@ -3908,6 +3881,7 @@ package body Sem_Ch12 is
                      Has_Inline_Always := True;
                   end if;
 
+                  Set_Is_Inlined (Gen_Unit);
                   return True;
                end if;
 
@@ -4281,12 +4255,13 @@ package body Sem_Ch12 is
             end if;
          end if;
 
-         --  Save the instantiation node, for subsequent instantiation of the
-         --  body, if there is one and we are generating code for the current
-         --  unit. Mark unit as having a body (avoids premature error message).
+         --  Save the instantiation node for a subsequent instantiation of the
+         --  body if there is one and the main unit is not generic, and either
+         --  we are generating code for this main unit, or the instantiation
+         --  contains inlined subprograms and is not done in a generic unit.
 
-         --  We instantiate the body if we are generating code, if we are
-         --  generating cross-reference information, or if we are building
+         --  We instantiate the body only if we are generating code, or if we
+         --  are generating cross-reference information, or if we are building
          --  trees for ASIS use or GNATprove use.
 
          declare
@@ -4379,14 +4354,15 @@ package body Sem_Ch12 is
               (Unit_Requires_Body (Gen_Unit)
                 or else Enclosing_Body_Present
                 or else Present (Corresponding_Body (Gen_Decl)))
+               and then not Is_Generic_Unit (Cunit_Entity (Main_Unit))
                and then (Is_In_Main_Unit (N)
-                          or else Might_Inline_Subp (Gen_Unit))
+                          or else (Might_Inline_Subp (Gen_Unit)
+                                    and then
+                                   not Is_Generic_Unit
+                                         (Cunit_Entity (Get_Code_Unit (N)))))
                and then not Is_Actual_Pack
                and then not Inline_Now
                and then (Operating_Mode = Generate_Code
-
-                          --  Need comment for this check ???
-
                           or else (Operating_Mode = Check_Semantics
                                     and then (ASIS_Mode or GNATprove_Mode)));
 
@@ -4394,9 +4370,9 @@ package body Sem_Ch12 is
             --  marked with Inline_Always, do not instantiate body when within
             --  a generic context.
 
-            if ((Front_End_Inlining or else Has_Inline_Always)
-                  and then not Expander_Active)
-              or else Is_Generic_Unit (Cunit_Entity (Main_Unit))
+            if not Back_End_Inlining
+              and then (Front_End_Inlining or else Has_Inline_Always)
+              and then not Expander_Active
             then
                Needs_Body := False;
             end if;
@@ -4461,17 +4437,6 @@ package body Sem_Ch12 is
          end if;
 
          if Needs_Body then
-
-            --  Here is a defence against a ludicrous number of instantiations
-            --  caused by a circular set of instantiation attempts.
-
-            if Pending_Instantiations.Last > Maximum_Instantiations then
-               Error_Msg_Uint_1 := UI_From_Int (Maximum_Instantiations);
-               Error_Msg_N ("too many instantiations, exceeds max of^", N);
-               Error_Msg_N ("\limit can be changed using -gnateinn switch", N);
-               raise Unrecoverable_Error;
-            end if;
-
             --  Indicate that the enclosing scopes contain an instantiation,
             --  and that cleanup actions should be delayed until after the
             --  instance body is expanded.
@@ -4489,10 +4454,10 @@ package body Sem_Ch12 is
                      if Ekind (Enclosing_Master) = E_Package then
                         if Is_Compilation_Unit (Enclosing_Master) then
                            if In_Package_Body (Enclosing_Master) then
-                              Delay_Descriptors
+                              Set_Delay_Subprogram_Descriptors
                                 (Body_Entity (Enclosing_Master));
                            else
-                              Delay_Descriptors
+                              Set_Delay_Subprogram_Descriptors
                                 (Enclosing_Master);
                            end if;
 
@@ -4532,7 +4497,7 @@ package body Sem_Ch12 is
                         end loop;
 
                         if Is_Subprogram (Enclosing_Master) then
-                           Delay_Descriptors (Enclosing_Master);
+                           Set_Delay_Subprogram_Descriptors (Enclosing_Master);
 
                         elsif Is_Task_Type (Enclosing_Master) then
                            declare
@@ -4541,7 +4506,7 @@ package body Sem_Ch12 is
                                         (Enclosing_Master);
                            begin
                               if Present (TBP) then
-                                 Delay_Descriptors  (TBP);
+                                 Set_Delay_Subprogram_Descriptors (TBP);
                                  Set_Delay_Cleanups (TBP);
                               end if;
                            end;
@@ -4669,11 +4634,10 @@ package body Sem_Ch12 is
          --  The instantiation results in a guaranteed ABE
 
          if Is_Known_Guaranteed_ABE (N) and then Needs_Body then
-
             --  Do not instantiate the corresponding body because gigi cannot
             --  handle certain types of premature instantiations.
 
-            Pending_Instantiations.Decrement_Last;
+            Remove_Dead_Instance (N);
 
             --  Create completing bodies for all subprogram declarations since
             --  their real bodies will not be instantiated.
@@ -5285,10 +5249,6 @@ package body Sem_Ch12 is
 
          Analyze (Pack_Decl);
          Check_Formal_Packages (Pack_Id);
-         Set_Is_Generic_Instance (Pack_Id, False);
-
-         --  Why do we clear Is_Generic_Instance??? We set it 20 lines
-         --  above???
 
          --  Body of the enclosing package is supplied when instantiating the
          --  subprogram body, after semantic analysis is completed.
@@ -6825,7 +6785,12 @@ package body Sem_Ch12 is
                Check_Private_View (Subtype_Indication (Parent (E)));
             end if;
 
-            Set_Is_Generic_Actual_Type (E, True);
+            Set_Is_Generic_Actual_Type (E);
+
+            if Is_Private_Type (E) and then Present (Full_View (E)) then
+               Set_Is_Generic_Actual_Type (Full_View (E));
+            end if;
+
             Set_Is_Hidden (E, False);
             Set_Is_Potentially_Use_Visible (E, In_Use (Instance));
 
@@ -11601,25 +11566,7 @@ package body Sem_Ch12 is
             --  indicate that the body instance is to be delayed.
 
             Install_Body (Act_Body, Inst_Node, Gen_Body, Gen_Decl);
-
-            --  Now analyze the body. We turn off all checks if this is an
-            --  internal unit, since there is no reason to have checks on for
-            --  any predefined run-time library code. All such code is designed
-            --  to be compiled with checks off.
-
-            --  Note that we do NOT apply this criterion to children of GNAT
-            --  The latter units must suppress checks explicitly if needed.
-
-            --  We also do not suppress checks in CodePeer mode where we are
-            --  interested in finding possible runtime errors.
-
-            if not CodePeer_Mode
-              and then In_Predefined_Unit (Gen_Decl)
-            then
-               Analyze (Act_Body, Suppress => All_Checks);
-            else
-               Analyze (Act_Body);
-            end if;
+            Analyze (Act_Body);
          end if;
 
          Inherit_Context (Gen_Body, Inst_Node);
@@ -14642,6 +14589,10 @@ package body Sem_Ch12 is
                null;
             else
                Set_Is_Generic_Actual_Type (E, False);
+
+               if Is_Private_Type (E) and then Present (Full_View (E)) then
+                  Set_Is_Generic_Actual_Type (Full_View (E), False);
+               end if;
             end if;
 
             --  An unusual case of aliasing: the actual may also be directly

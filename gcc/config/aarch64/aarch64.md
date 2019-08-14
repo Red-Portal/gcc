@@ -219,14 +219,14 @@
     UNSPEC_LD1RQ
     UNSPEC_LD1_GATHER
     UNSPEC_ST1_SCATTER
-    UNSPEC_MERGE_PTRUE
-    UNSPEC_PTEST_PTRUE
+    UNSPEC_PRED_X
+    UNSPEC_PRED_Z
+    UNSPEC_PTEST
     UNSPEC_UNPACKSHI
     UNSPEC_UNPACKUHI
     UNSPEC_UNPACKSLO
     UNSPEC_UNPACKULO
     UNSPEC_PACK
-    UNSPEC_FLOAT_CONVERT
     UNSPEC_WHILE_LO
     UNSPEC_LDN
     UNSPEC_STN
@@ -234,6 +234,7 @@
     UNSPEC_CLASTB
     UNSPEC_FADDA
     UNSPEC_REV_SUBREG
+    UNSPEC_REINTERPRET
     UNSPEC_SPECULATION_TRACKER
     UNSPEC_COPYSIGN
     UNSPEC_TTEST		; Represent transaction test.
@@ -257,6 +258,27 @@
     UNSPECV_TCANCEL		; Represent transaction cancel.
   ]
 )
+
+;; These constants are used as a const_int in various SVE unspecs
+;; to indicate whether the governing predicate is known to be a PTRUE.
+(define_constants
+  [; Indicates that the predicate might not be a PTRUE.
+   (SVE_MAYBE_NOT_PTRUE 0)
+
+   ; Indicates that the predicate is known to be a PTRUE.
+   (SVE_KNOWN_PTRUE 1)])
+
+;; These constants are used as a const_int in predicated SVE FP arithmetic
+;; to indicate whether the operation is allowed to make additional lanes
+;; active without worrying about the effect on faulting behavior.
+(define_constants
+  [; Indicates either that all lanes are active or that the instruction may
+   ; operate on inactive inputs even if doing so could induce a fault.
+   (SVE_RELAXED_GP 0)
+
+   ; Indicates that some lanes might be inactive and that the instruction
+   ; must not operate on inactive inputs if doing so could induce a fault.
+   (SVE_STRICT_GP 1)])
 
 ;; If further include files are added the defintion of MD_INCLUDES
 ;; must be updated.
@@ -6322,7 +6344,7 @@
   [(match_operand:GPI 0 "register_operand")
    (match_operand:GPF 1 "register_operand")]
   "TARGET_FLOAT
-   && ((GET_MODE_SIZE (<GPF:MODE>mode) <= GET_MODE_SIZE (<GPI:MODE>mode))
+   && ((GET_MODE_BITSIZE (<GPF:MODE>mode) <= LONG_TYPE_SIZE)
    || !flag_trapping_math || flag_fp_int_builtin_inexact)"
 {
   rtx cvt = gen_reg_rtx (<GPF:MODE>mode);
@@ -7132,12 +7154,6 @@
   "hint\t38 // bti jc"
   [(set_attr "type" "no_insn")]
 )
-
-;; Helper for aarch64.c code.
-(define_expand "set_clobber_cc_nzc"
-  [(parallel [(set (match_operand 0)
-		   (match_operand 1))
-	      (clobber (reg:CC_NZC CC_REGNUM))])])
 
 ;; Hard speculation barrier.
 (define_insn "speculation_barrier"

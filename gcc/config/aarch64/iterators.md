@@ -278,6 +278,10 @@
 (define_mode_iterator SVE_ALL [VNx16QI VNx8HI VNx4SI VNx2DI
 			       VNx8HF VNx4SF VNx2DF])
 
+;; Iterators for single modes, for "@" patterns.
+(define_mode_iterator VNx4SI_ONLY [VNx4SI])
+(define_mode_iterator VNx2DF_ONLY [VNx2DF])
+
 ;; All SVE vector structure modes.
 (define_mode_iterator SVE_STRUCT [VNx32QI VNx16HI VNx8SI VNx4DI
 				  VNx16HF VNx8SF VNx4DF
@@ -292,14 +296,23 @@
 ;; All SVE vector modes that have 8-bit, 16-bit or 32-bit elements.
 (define_mode_iterator SVE_BHS [VNx16QI VNx8HI VNx4SI VNx8HF VNx4SF])
 
-;; All SVE integer vector modes that have 8-bit, 16-bit or 32-bit elements.
+;; SVE integer vector modes that have 8-bit, 16-bit or 32-bit elements.
 (define_mode_iterator SVE_BHSI [VNx16QI VNx8HI VNx4SI])
 
-;; All SVE integer vector modes that have 16-bit, 32-bit or 64-bit elements.
-(define_mode_iterator SVE_HSDI [VNx16QI VNx8HI VNx4SI])
+;; SVE integer vector modes that have 16-bit, 32-bit or 64-bit elements.
+(define_mode_iterator SVE_HSDI [VNx8HI VNx4SI VNx2DI])
 
-;; All SVE floating-point vector modes that have 16-bit or 32-bit elements.
+;; SVE floating-point vector modes that have 16-bit or 32-bit elements.
 (define_mode_iterator SVE_HSF [VNx8HF VNx4SF])
+
+;; SVE integer vector modes that have 32-bit or 64-bit elements.
+(define_mode_iterator SVE_SDI [VNx4SI VNx2DI])
+
+;; SVE floating-point vector modes that have 32-bit or 64-bit elements.
+(define_mode_iterator SVE_SDF [VNx4SF VNx2DF])
+
+;; All SVE vector modes that have 16-bit, 32-bit or 64-bit elements.
+(define_mode_iterator SVE_HSD [VNx8HI VNx4SI VNx2DI VNx8HF VNx4SF VNx2DF])
 
 ;; All SVE vector modes that have 32-bit or 64-bit elements.
 (define_mode_iterator SVE_SD [VNx4SI VNx2DI VNx4SF VNx2DF])
@@ -309,9 +322,6 @@
 
 ;; All SVE vector modes that have 64-bit elements.
 (define_mode_iterator SVE_D [VNx2DI VNx2DF])
-
-;; All SVE integer vector modes that have 32-bit or 64-bit elements.
-(define_mode_iterator SVE_SDI [VNx4SI VNx2DI])
 
 ;; All SVE integer vector modes.
 (define_mode_iterator SVE_I [VNx16QI VNx8HI VNx4SI VNx2DI])
@@ -476,6 +486,10 @@
     UNSPEC_COND_FCMLE	; Used in aarch64-sve.md.
     UNSPEC_COND_FCMLT	; Used in aarch64-sve.md.
     UNSPEC_COND_FCMNE	; Used in aarch64-sve.md.
+    UNSPEC_COND_FCMUO	; Used in aarch64-sve.md.
+    UNSPEC_COND_FCVT	; Used in aarch64-sve.md.
+    UNSPEC_COND_FCVTZS	; Used in aarch64-sve.md.
+    UNSPEC_COND_FCVTZU	; Used in aarch64-sve.md.
     UNSPEC_COND_FDIV	; Used in aarch64-sve.md.
     UNSPEC_COND_FMAXNM	; Used in aarch64-sve.md.
     UNSPEC_COND_FMINNM	; Used in aarch64-sve.md.
@@ -494,6 +508,8 @@
     UNSPEC_COND_FRINTZ	; Used in aarch64-sve.md.
     UNSPEC_COND_FSQRT	; Used in aarch64-sve.md.
     UNSPEC_COND_FSUB	; Used in aarch64-sve.md.
+    UNSPEC_COND_SCVTF	; Used in aarch64-sve.md.
+    UNSPEC_COND_UCVTF	; Used in aarch64-sve.md.
     UNSPEC_LASTB	; Used in aarch64-sve.md.
     UNSPEC_FCADD90	; Used in aarch64-simd.md.
     UNSPEC_FCADD270	; Used in aarch64-simd.md.
@@ -619,6 +635,11 @@
 ;; Give the ordinal of the MSB in the mode
 (define_mode_attr sizem1 [(QI "#7") (HI "#15") (SI "#31") (DI "#63")
 			  (HF "#15") (SF "#31") (DF "#63")])
+
+;; The number of bits in a vector element, or controlled by a predicate
+;; element.
+(define_mode_attr elem_bits [(VNx8HI "16") (VNx4SI "32") (VNx2DI "64")
+			     (VNx8HF "16") (VNx4SF "32") (VNx2DF "64")])
 
 ;; Attribute to describe constants acceptable in logical operations
 (define_mode_attr lconst [(SI "K") (DI "L")])
@@ -928,9 +949,11 @@
 ])
 
 ;; Floating-point equivalent of selected modes.
-(define_mode_attr V_FP_EQUIV [(VNx4SI "VNx4SF") (VNx4SF "VNx4SF")
+(define_mode_attr V_FP_EQUIV [(VNx8HI "VNx8HF") (VNx8HF "VNx8HF")
+			      (VNx4SI "VNx4SF") (VNx4SF "VNx4SF")
 			      (VNx2DI "VNx2DF") (VNx2DF "VNx2DF")])
-(define_mode_attr v_fp_equiv [(VNx4SI "vnx4sf") (VNx4SF "vnx4sf")
+(define_mode_attr v_fp_equiv [(VNx8HI "vnx8hf") (VNx8HF "vnx8hf")
+			      (VNx4SI "vnx4sf") (VNx4SF "vnx4sf")
 			      (VNx2DI "vnx2df") (VNx2DF "vnx2df")])
 
 ;; Mode for vector conditional operations where the comparison has
@@ -1169,6 +1192,10 @@
 				    (V4HF "<Vetype>[%4]") (V8HF "<Vetype>[%4]")
 				    ])
 
+;; The number of bytes controlled by a predicate
+(define_mode_attr data_bytes [(VNx16BI "1") (VNx8BI "2")
+			      (VNx4BI "4") (VNx2BI "8")])
+
 ;; -------------------------------------------------------------------
 ;; Code Iterators
 ;; -------------------------------------------------------------------
@@ -1249,7 +1276,7 @@
 (define_code_iterator FAC_COMPARISONS [lt le ge gt])
 
 ;; SVE integer unary operations.
-(define_code_iterator SVE_INT_UNARY [abs neg not popcount])
+(define_code_iterator SVE_INT_UNARY [abs neg not clrsb clz popcount])
 
 ;; SVE integer binary operations.
 (define_code_iterator SVE_INT_BINARY [plus minus mult smax umax smin umin
@@ -1258,14 +1285,14 @@
 ;; SVE integer binary division operations.
 (define_code_iterator SVE_INT_BINARY_SD [div udiv])
 
+;; SVE integer binary operations that have an immediate form.
+(define_code_iterator SVE_INT_BINARY_IMM [mult smax smin umax umin])
+
 ;; SVE floating-point operations with an unpredicated all-register form.
 (define_code_iterator SVE_UNPRED_FP_BINARY [plus minus mult])
 
 ;; SVE integer comparisons.
 (define_code_iterator SVE_INT_CMP [lt le eq ne ge gt ltu leu geu gtu])
-
-;; SVE floating-point comparisons.
-(define_code_iterator SVE_FP_CMP [lt le eq ne ge gt])
 
 ;; -------------------------------------------------------------------
 ;; Code Attributes
@@ -1283,6 +1310,8 @@
 			 (unsigned_fix "fixuns")
 			 (float "float")
 			 (unsigned_float "floatuns")
+			 (clrsb "clrsb")
+			 (clz "clz")
 			 (popcount "popcount")
 			 (and "and")
 			 (ior "ior")
@@ -1450,6 +1479,8 @@
 			      (ior "orr")
 			      (xor "eor")
 			      (not "not")
+			      (clrsb "cls")
+			      (clz "clz")
 			      (popcount "cnt")])
 
 (define_code_attr sve_int_op_rev [(plus "add")
@@ -1471,7 +1502,12 @@
 			     (mult "fmul")])
 
 ;; The SVE immediate constraint to use for an rtl code.
-(define_code_attr sve_imm_con [(eq "vsc")
+(define_code_attr sve_imm_con [(mult "vsm")
+			       (smax "vsm")
+			       (smin "vsm")
+			       (umax "vsb")
+			       (umin "vsb")
+			       (eq "vsc")
 			       (ne "vsc")
 			       (lt "vsc")
 			       (ge "vsc")
@@ -1481,6 +1517,27 @@
 			       (leu "vsd")
 			       (geu "vsd")
 			       (gtu "vsd")])
+
+;; The prefix letter to use when printing an immediate operand.
+(define_code_attr sve_imm_prefix [(mult "")
+				  (smax "")
+				  (smin "")
+				  (umax "D")
+				  (umin "D")])
+
+;; The predicate to use for the second input operand in a cond_<optab><mode>
+;; pattern.
+(define_code_attr sve_pred_int_rhs2_operand
+  [(plus "register_operand")
+   (minus "register_operand")
+   (mult "register_operand")
+   (smax "register_operand")
+   (umax "register_operand")
+   (smin "register_operand")
+   (umin "register_operand")
+   (and "aarch64_sve_pred_and_operand")
+   (ior "register_operand")
+   (xor "register_operand")])
 
 ;; -------------------------------------------------------------------
 ;; Int Iterators.
@@ -1635,12 +1692,18 @@
 					UNSPEC_COND_FRINTZ
 					UNSPEC_COND_FSQRT])
 
+(define_int_iterator SVE_COND_FCVT [UNSPEC_COND_FCVT])
+(define_int_iterator SVE_COND_FCVTI [UNSPEC_COND_FCVTZS UNSPEC_COND_FCVTZU])
+(define_int_iterator SVE_COND_ICVTF [UNSPEC_COND_SCVTF UNSPEC_COND_UCVTF])
+
 (define_int_iterator SVE_COND_FP_BINARY [UNSPEC_COND_FADD
 					 UNSPEC_COND_FDIV
 					 UNSPEC_COND_FMAXNM
 					 UNSPEC_COND_FMINNM
 					 UNSPEC_COND_FMUL
 					 UNSPEC_COND_FSUB])
+
+(define_int_iterator SVE_COND_FP_BINARY_REG [UNSPEC_COND_FDIV])
 
 ;; Floating-point max/min operations that correspond to optabs,
 ;; as opposed to those that are internal to the port.
@@ -1652,12 +1715,18 @@
 					  UNSPEC_COND_FNMLA
 					  UNSPEC_COND_FNMLS])
 
-(define_int_iterator SVE_COND_FP_CMP [UNSPEC_COND_FCMEQ
-				      UNSPEC_COND_FCMGE
-				      UNSPEC_COND_FCMGT
-				      UNSPEC_COND_FCMLE
-				      UNSPEC_COND_FCMLT
-				      UNSPEC_COND_FCMNE])
+;; SVE FP comparisons that accept #0.0.
+(define_int_iterator SVE_COND_FP_CMP_I0 [UNSPEC_COND_FCMEQ
+					 UNSPEC_COND_FCMGE
+					 UNSPEC_COND_FCMGT
+					 UNSPEC_COND_FCMLE
+					 UNSPEC_COND_FCMLT
+					 UNSPEC_COND_FCMNE])
+
+(define_int_iterator SVE_COND_FP_ABS_CMP [UNSPEC_COND_FCMGE
+					  UNSPEC_COND_FCMGT
+					  UNSPEC_COND_FCMLE
+					  UNSPEC_COND_FCMLT])
 
 (define_int_iterator FCADD [UNSPEC_FCADD90
 			    UNSPEC_FCADD270])
@@ -1705,6 +1774,9 @@
 			(UNSPEC_FMINV "smin_nan")
 			(UNSPEC_COND_FABS "abs")
 			(UNSPEC_COND_FADD "add")
+			(UNSPEC_COND_FCVT "fcvt")
+			(UNSPEC_COND_FCVTZS "fix_trunc")
+			(UNSPEC_COND_FCVTZU "fixuns_trunc")
 			(UNSPEC_COND_FDIV "div")
 			(UNSPEC_COND_FMAXNM "smax")
 			(UNSPEC_COND_FMINNM "smin")
@@ -1722,7 +1794,9 @@
 			(UNSPEC_COND_FRINTX "rint")
 			(UNSPEC_COND_FRINTZ "btrunc")
 			(UNSPEC_COND_FSQRT "sqrt")
-			(UNSPEC_COND_FSUB "sub")])
+			(UNSPEC_COND_FSUB "sub")
+			(UNSPEC_COND_SCVTF "float")
+			(UNSPEC_COND_UCVTF "floatuns")])
 
 (define_int_attr  maxmin_uns [(UNSPEC_UMAXV "umax")
 			      (UNSPEC_UMINV "umin")
@@ -1763,7 +1837,11 @@
 		     (UNSPEC_UNPACKSLO "s")
 		     (UNSPEC_UNPACKULO "u")
 		     (UNSPEC_SMUL_HIGHPART "s")
-		     (UNSPEC_UMUL_HIGHPART "u")])
+		     (UNSPEC_UMUL_HIGHPART "u")
+		     (UNSPEC_COND_FCVTZS "s")
+		     (UNSPEC_COND_FCVTZU "u")
+		     (UNSPEC_COND_SCVTF "s")
+		     (UNSPEC_COND_UCVTF "u")])
 
 (define_int_attr sur [(UNSPEC_SHADD "s") (UNSPEC_UHADD "u")
 		      (UNSPEC_SRHADD "sr") (UNSPEC_URHADD "ur")
@@ -1888,18 +1966,15 @@
 				   (UNSPEC_AUTIA1716 "12")
 				   (UNSPEC_AUTIB1716 "14")])
 
-(define_int_attr perm_insn [(UNSPEC_ZIP1 "zip") (UNSPEC_ZIP2 "zip")
-			    (UNSPEC_TRN1 "trn") (UNSPEC_TRN2 "trn")
-			    (UNSPEC_UZP1 "uzp") (UNSPEC_UZP2 "uzp")])
+(define_int_attr perm_insn [(UNSPEC_ZIP1 "zip1") (UNSPEC_ZIP2 "zip2")
+			    (UNSPEC_TRN1 "trn1") (UNSPEC_TRN2 "trn2")
+			    (UNSPEC_UZP1 "uzp1") (UNSPEC_UZP2 "uzp2")])
 
 ; op code for REV instructions (size within which elements are reversed).
 (define_int_attr rev_op [(UNSPEC_REV64 "64") (UNSPEC_REV32 "32")
 			 (UNSPEC_REV16 "16")])
 
-(define_int_attr perm_hilo [(UNSPEC_ZIP1 "1") (UNSPEC_ZIP2 "2")
-			    (UNSPEC_TRN1 "1") (UNSPEC_TRN2 "2")
-			    (UNSPEC_UZP1 "1") (UNSPEC_UZP2 "2")
-			    (UNSPEC_UNPACKSHI "hi") (UNSPEC_UNPACKUHI "hi")
+(define_int_attr perm_hilo [(UNSPEC_UNPACKSHI "hi") (UNSPEC_UNPACKUHI "hi")
 			    (UNSPEC_UNPACKSLO "lo") (UNSPEC_UNPACKULO "lo")])
 
 ;; Return true if the associated optab refers to the high-numbered lanes,
@@ -1947,7 +2022,8 @@
 			 (UNSPEC_COND_FCMGT "gt")
 			 (UNSPEC_COND_FCMLE "le")
 			 (UNSPEC_COND_FCMLT "lt")
-			 (UNSPEC_COND_FCMNE "ne")])
+			 (UNSPEC_COND_FCMNE "ne")
+			 (UNSPEC_COND_FCMUO "uo")])
 
 (define_int_attr sve_int_op [(UNSPEC_ANDV "andv")
 			     (UNSPEC_IORV "orv")
@@ -2002,3 +2078,23 @@
 			      (UNSPEC_COND_FMLS "fmsb")
 			      (UNSPEC_COND_FNMLA "fnmad")
 			      (UNSPEC_COND_FNMLS "fnmsb")])
+
+;; The predicate to use for the first input operand in a floating-point
+;; <optab><mode>3 pattern.
+(define_int_attr sve_pred_fp_rhs1_operand
+  [(UNSPEC_COND_FADD "register_operand")
+   (UNSPEC_COND_FDIV "register_operand")
+   (UNSPEC_COND_FMAXNM "register_operand")
+   (UNSPEC_COND_FMINNM "register_operand")
+   (UNSPEC_COND_FMUL "register_operand")
+   (UNSPEC_COND_FSUB "aarch64_sve_float_arith_operand")])
+
+;; The predicate to use for the second input operand in a floating-point
+;; <optab><mode>3 pattern.
+(define_int_attr sve_pred_fp_rhs2_operand
+  [(UNSPEC_COND_FADD "aarch64_sve_float_arith_with_sub_operand")
+   (UNSPEC_COND_FDIV "register_operand")
+   (UNSPEC_COND_FMAXNM "aarch64_sve_float_maxmin_operand")
+   (UNSPEC_COND_FMINNM "aarch64_sve_float_maxmin_operand")
+   (UNSPEC_COND_FMUL "aarch64_sve_float_mul_operand")
+   (UNSPEC_COND_FSUB "register_operand")])

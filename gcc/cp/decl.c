@@ -2544,8 +2544,7 @@ duplicate_decls (tree newdecl, tree olddecl, bool newdecl_is_friend)
       if (fndecl_built_in_p (olddecl)
 	  && (new_defines_function ? GNU_INLINE_P (newdecl) : types_match))
 	{
-	  DECL_BUILT_IN_CLASS (newdecl) = DECL_BUILT_IN_CLASS (olddecl);
-	  DECL_FUNCTION_CODE (newdecl) = DECL_FUNCTION_CODE (olddecl);
+	  copy_decl_built_in_function (newdecl, olddecl);
 	  /* If we're keeping the built-in definition, keep the rtl,
 	     regardless of declaration matches.  */
 	  COPY_DECL_RTL (olddecl, newdecl);
@@ -10579,7 +10578,8 @@ grokdeclarator (const cp_declarator *declarator,
 		    ctype = qualifying_scope;
 		    if (!MAYBE_CLASS_TYPE_P (ctype))
 		      {
-			error ("%q#T is not a class or a namespace", ctype);
+			error_at (id_declarator->id_loc,
+				  "%q#T is not a class or namespace", ctype);
 			ctype = NULL_TREE;
 		      }
 		    else if (innermost_code != cdk_function
@@ -10601,13 +10601,15 @@ grokdeclarator (const cp_declarator *declarator,
 		{
 		  if (innermost_code != cdk_function)
 		    {
-		      error ("declaration of %qD as non-function", decl);
+		      error_at (EXPR_LOCATION (decl),
+				"declaration of %qE as non-function", decl);
 		      return error_mark_node;
 		    }
 		  else if (!qualifying_scope
 			   && !(current_class_type && at_class_scope_p ()))
 		    {
-		      error ("declaration of %qD as non-member", decl);
+		      error_at (EXPR_LOCATION (decl),
+				"declaration of %qE as non-member", decl);
 		      return error_mark_node;
 		    }
 
@@ -12162,6 +12164,17 @@ grokdeclarator (const cp_declarator *declarator,
       bool alias_p = decl_spec_seq_has_spec_p (declspecs, ds_alias);
       tree decl;
 
+      if (funcdef_flag)
+	{
+	  if (decl_context == NORMAL)
+	    error_at (id_loc,
+		      "typedef may not be a function definition");
+	  else
+	    error_at (id_loc,
+		      "typedef may not be a member function definition");
+	  return error_mark_node;
+	}
+
       /* This declaration:
 
 	   typedef void f(int) const;
@@ -12510,7 +12523,7 @@ grokdeclarator (const cp_declarator *declarator,
 	else if (in_namespace && !friendp)
 	  {
 	    /* Something like struct S { int N::j; };  */
-	    error ("invalid use of %<::%>");
+	    error_at (id_loc, "invalid use of %<::%>");
 	    return error_mark_node;
 	  }
 	else if (FUNC_OR_METHOD_TYPE_P (type) && unqualified_id)
@@ -12565,15 +12578,15 @@ grokdeclarator (const cp_declarator *declarator,
 		if (!ctype)
 		  {
 		    gcc_assert (friendp);
-		    error ("expected qualified name in friend declaration "
-			   "for destructor %qD", uqname);
+		    error_at (id_loc, "expected qualified name in friend "
+			      "declaration for destructor %qD", uqname);
 		    return error_mark_node;
 		  }
 
 		if (!check_dtor_name (ctype, TREE_OPERAND (uqname, 0)))
 		  {
-		    error ("declaration of %qD as member of %qT",
-			   uqname, ctype);
+		    error_at (id_loc, "declaration of %qD as member of %qT",
+			      uqname, ctype);
 		    return error_mark_node;
 		  }
                 if (concept_p)
@@ -13174,7 +13187,9 @@ check_default_argument (tree decl, tree arg, tsubst_flags_t complain)
   /* Avoid redundant -Wzero-as-null-pointer-constant warnings at
      the call sites.  */
   if (TYPE_PTR_OR_PTRMEM_P (decl_type)
-      && null_ptr_cst_p (arg))
+      && null_ptr_cst_p (arg)
+      /* Don't lose side-effects as in PR90473.  */
+      && !TREE_SIDE_EFFECTS (arg))
     return nullptr_node;
 
   /* [dcl.fct.default]
@@ -15772,13 +15787,6 @@ start_function (cp_decl_specifier_seq *declspecs,
   invoke_plugin_callbacks (PLUGIN_START_PARSE_FUNCTION, decl1);
   if (decl1 == error_mark_node)
     return false;
-  /* If the declarator is not suitable for a function definition,
-     cause a syntax error.  */
-  if (decl1 == NULL_TREE || TREE_CODE (decl1) != FUNCTION_DECL)
-    {
-      error ("invalid function declaration");
-      return false;
-    }
 
   if (DECL_MAIN_P (decl1))
     /* main must return int.  grokfndecl should have corrected it
@@ -16432,12 +16440,6 @@ grokmethod (cp_decl_specifier_seq *declspecs,
 
   if (fndecl == error_mark_node)
     return error_mark_node;
-
-  if (fndecl == NULL || TREE_CODE (fndecl) != FUNCTION_DECL)
-    {
-      error ("invalid member function declaration");
-      return error_mark_node;
-    }
 
   if (attrlist)
     cplus_decl_attributes (&fndecl, attrlist, 0);
