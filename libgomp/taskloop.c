@@ -312,32 +312,37 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		goto do_cancel;
 	    }
 	}
-      gomp_mutex_lock (&team->task_lock);
       if (taskgroup)
 	__atomic_add_fetch (&taskgroup->num_children, num_tasks,
 			    MEMMODEL_ACQ_REL);
       __atomic_add_fetch (&parent->num_children, num_tasks, MEMMODEL_ACQ_REL);
       __atomic_add_fetch (&team->task_count, num_tasks, MEMMODEL_ACQ_REL);
+
       for (i = 0; i < num_tasks; i++)
 	{
+	  gomp_mutex_lock (&team->task_lock);
 	  struct gomp_task *task = tasks[i];
 	  priority_queue_insert (&team->task_queue, task, priority,
 				 PRIORITY_INSERT_END,
 				 /*last_parent_depends_on=*/false,
 				 task->parent_depends_on);
-	  ++team->task_queued_count;
+	  __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
+	  gomp_mutex_unlock (&team->task_lock);
 	}
       gomp_team_barrier_set_task_pending (&team->barrier);
-      if (team->task_running_count + !parent->in_tied_task < team->nthreads)
+      if (__atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
+	    + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
+	  < team->nthreads)
 	{
-	  do_wake = team->nthreads - team->task_running_count
-		    - !parent->in_tied_task;
+	  do_wake
+	    = team->nthreads
+	      - __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
+	      - !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE);
 	  if ((unsigned long) do_wake > num_tasks)
 	    do_wake = num_tasks;
 	}
       else
 	do_wake = 0;
-      gomp_mutex_unlock (&team->task_lock);
       if (do_wake)
 	gomp_team_barrier_wake (&team->barrier, do_wake);
     }
