@@ -456,6 +456,11 @@ struct gomp_task
   struct gomp_dependers_vec *dependers;
   struct htab *depend_hash;
   struct gomp_taskwait *taskwait;
+
+  /* Mutex protecting the depedency related data structures.
+     Only initialized if other tasks depend on this task. */
+  gomp_mutex_t depend_lock;
+
   /* Number of items in DEPEND.  */
   size_t depend_count;
   /* Number of tasks this task depends on.  Once this counter reaches
@@ -837,6 +842,7 @@ gomp_finish_task (struct gomp_task *task)
 {
   if (__builtin_expect (task->depend_hash != NULL, 0))
     free (task->depend_hash);
+  gomp_mutex_destroy (&task->depend_lock);
 }
 
 /* team.c */

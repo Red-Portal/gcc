@@ -87,6 +87,10 @@ gomp_init_task (struct gomp_task *task, struct gomp_task *parent_task,
   task->depend_hash = NULL;
   task->depend_count = 0;
   task->num_children = 0;
+  /* Currently we're initializing the depend lock for every tasks.
+     However, it coulbd be possible that the mutex can be initialized
+     on-demand by the dependers. */
+  gomp_mutex_init (&task->depend_lock);
 }
 
 /* Clean up a task, after completing it.  */
@@ -171,8 +175,10 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
     }
   task->depend_count = ndepend;
   task->num_dependees = 0;
+
+  gomp_mutex_lock (&parent->depend_lock);
   if (parent->depend_hash == NULL)
-    parent->depend_hash = htab_create (2 * ndepend > 12 ? 2 * ndepend : 12);
+      parent->depend_hash = htab_create (2 * ndepend > 12 ? 2 * ndepend : 12);
   for (i = 0; i < ndepend; i++)
     {
       task->depend[i].next = NULL;
@@ -270,6 +276,7 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
 	  out->redundant_out = true;
 	}
     }
+  gomp_mutex_unlock (&parent->depend_lock);
 }
 
 /* Called when encountering an explicit task directive.  If IF_CLAUSE is
@@ -431,7 +438,6 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       if (taskgroup)
 	__atomic_add_fetch (&taskgroup->num_children, 1, MEMMODEL_ACQ_REL);
 
-      gomp_mutex_lock (&team->task_lock);
       if (depend_size)
 	{
 	  gomp_task_handle_depend (task, parent, depend);
@@ -444,7 +450,6 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		 dependencies have been satisfied.  After which, they
 		 can be picked up by the various scheduling
 		 points.  */
-	      gomp_mutex_unlock (&team->task_lock);
 	      return;
 	    }
 	}
@@ -453,6 +458,8 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	 dependencies are met. */
       __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
       __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
+
+      gomp_mutex_lock (&team->task_lock);
       priority_queue_insert (&team->task_queue, task, priority,
 			     PRIORITY_INSERT_END,
 			     /*adjust_parent_depends_on=*/false,
@@ -802,26 +809,30 @@ gomp_task_run_post_handle_depend_hash (struct gomp_task *child_task)
   struct gomp_task *parent = child_task->parent;
   size_t i;
 
+  gomp_mutex_lock (&parent->depend_lock);
   for (i = 0; i < child_task->depend_count; i++)
-    if (!child_task->depend[i].redundant)
-      {
-	if (child_task->depend[i].next)
-	  child_task->depend[i].next->prev = child_task->depend[i].prev;
-	if (child_task->depend[i].prev)
-	  child_task->depend[i].prev->next = child_task->depend[i].next;
-	else
-	  {
-	    hash_entry_type *slot
-	      = htab_find_slot (&parent->depend_hash, &child_task->depend[i],
-				NO_INSERT);
-	    if (*slot != &child_task->depend[i])
-	      abort ();
-	    if (child_task->depend[i].next)
-	      *slot = child_task->depend[i].next;
-	    else
-	      htab_clear_slot (parent->depend_hash, slot);
-	  }
-      }
+    {
+      if (!child_task->depend[i].redundant)
+	{
+	  if (child_task->depend[i].next)
+	    child_task->depend[i].next->prev = child_task->depend[i].prev;
+	  if (child_task->depend[i].prev)
+	    child_task->depend[i].prev->next = child_task->depend[i].next;
+	  else
+	    {
+	      hash_entry_type *slot
+		= htab_find_slot (&parent->depend_hash, &child_task->depend[i],
+				  NO_INSERT);
+	      if (*slot != &child_task->depend[i])
+		abort ();
+	      if (child_task->depend[i].next)
+		*slot = child_task->depend[i].next;
+	      else
+		htab_clear_slot (parent->depend_hash, slot);
+	    }
+	}
+    }
+  gomp_mutex_unlock (&parent->depend_lock);
 }
 
 /* After a CHILD_TASK has been run, adjust the dependency queue for
@@ -845,7 +856,7 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
 	 TASK's remaining dependencies.  Once TASK has no other
 	 depenencies, put it into the various queues so it will get
 	 scheduled for execution.  */
-      if (--task->num_dependees != 0)
+      if (__atomic_sub_fetch (&task->num_dependees, 1, MEMMODEL_ACQ_REL) != 0)
 	continue;
 
       __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
@@ -1114,11 +1125,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
   while (true)
     {
       bool cancelled = false;
-
-      printf("%d %d\n", __atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE),
-	     __atomic_load_n (&team->task_count, MEMMODEL_ACQUIRE));
-      if (//!__atomic_load_n (&team->task_queued_cound, MEMMODEL_ACQUIRE) == 0)
-	  !priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
+      if (!priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
 	{
 	  child_task = priority_queue_next_task (&team->task_queue);
 	  cancelled = gomp_task_run_pre (child_task, team);
@@ -1184,12 +1191,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	  thr->task = task;
 	}
       else
-	  {
-	      
-      printf("done: %d %d\n", __atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE),
-	     __atomic_load_n (&team->task_count, MEMMODEL_ACQUIRE));
 	return;
-	  }
       gomp_mutex_lock (&team->task_lock);
       if (child_task)
 	{
@@ -1354,7 +1356,7 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
       normal = nout + (uintptr_t) depend[4];
       n = 5;
     }
-  gomp_mutex_lock (&team->task_lock);
+  gomp_mutex_lock (&task->depend_lock);
   for (i = 0; i < ndepend; i++)
     {
       elem.addr = depend[i + n];
@@ -1394,20 +1396,20 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 	      }
 	  }
     }
+  gomp_mutex_unlock (&task->depend_lock);
+
   if (num_awaited == 0)
-    {
-      gomp_mutex_unlock (&team->task_lock);
       return;
-    }
 
   memset (&taskwait, 0, sizeof (taskwait));
   gomp_sem_init (&taskwait.taskwait_sem, 0);
   taskwait.n_depend = num_awaited;
   __atomic_store_n (&task->taskwait, &taskwait, MEMMODEL_RELEASE);
 
+  gomp_mutex_lock (&team->task_lock);
   while (true)
     {
-      if (taskwait.n_depend == 0)
+      if (__atomic_load_n (&taskwait.n_depend, MEMMODEL_RELAXED) == 0)
 	{
 	  __atomic_store_n (&task->taskwait, NULL, MEMMODEL_RELEASE);
 	  gomp_mutex_unlock (&team->task_lock);
