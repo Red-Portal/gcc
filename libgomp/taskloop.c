@@ -312,11 +312,26 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		goto do_cancel;
 	    }
 	}
+
+#if _LIBGOMP_CHECKING_
+      if (__atomic_load_n (&parent->state,
+			   MEMMODEL_ACQUIRE) == GOMP_STATE_DONE)
+	gomp_fatal ("GOMP_taskloop: state of parent task is GOMP_STATE_DONE");
+#endif
+
+      if (__atomic_load_n (&parent->state,
+			   MEMMODEL_ACQUIRE) == GOMP_STATE_WOKEN)
+	{
+	  __atomic_store_n (&parent->state, GOMP_STATE_DEFAULT,
+			    MEMMODEL_RELEASE);
+	}
+
       if (taskgroup)
 	__atomic_add_fetch (&taskgroup->num_children, num_tasks,
 			    MEMMODEL_ACQ_REL);
       __atomic_add_fetch (&parent->num_children, num_tasks, MEMMODEL_ACQ_REL);
       __atomic_add_fetch (&team->task_count, num_tasks, MEMMODEL_ACQ_REL);
+
 
       for (i = 0; i < num_tasks; i++)
 	{

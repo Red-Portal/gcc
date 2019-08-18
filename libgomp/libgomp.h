@@ -406,10 +406,21 @@ enum gomp_task_kind
      into the queues as GOMP_TASK_WAITING in order to perform the var
      unmapping.  */
   GOMP_TASK_ASYNC_RUNNING,
+};
 
-  /* The task is left only for dependency tracking purpose
-     and is ready to be freed anytime. */
-  GOMP_DONE
+/* States are used to track who and when a task should be freed. */
+enum gomp_task_state
+{
+  /* Default state */
+  GOMP_STATE_DEFAULT,
+
+  /* The task is done executing. It can be freed once no thread is waiting
+     in its semaphore and no children are left. */
+  GOMP_STATE_DONE,
+
+  /* No thread is waiting on the task's semaphore and no children are left.
+     The task is free to go. */
+  GOMP_STATE_WOKEN
 };
 
 struct gomp_task_depend_entry
@@ -480,6 +491,7 @@ struct gomp_task
   void (*fn) (void *);
   void *fn_data;
   enum gomp_task_kind kind;
+  enum gomp_task_state state;
   bool in_tied_task;
   bool final_task;
   bool copy_ctors_done;
