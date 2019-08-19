@@ -613,6 +613,10 @@ general_scalar_chain::replace_with_subreg (rtx x, rtx reg, rtx new_reg)
   if (x == reg)
     return gen_rtx_SUBREG (vmode, new_reg, 0);
 
+  /* But not in memory addresses.  */
+  if (MEM_P (x))
+    return x;
+
   const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
   int i, j;
   for (i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
@@ -658,6 +662,25 @@ scalar_chain::emit_conversion_insns (rtx insns, rtx_insn *after)
   emit_insn_after (insns, BB_HEAD (new_bb));
 }
 
+/* Generate the canonical SET_SRC to move GPR to a VMODE vector register,
+   zeroing the upper parts.  */
+
+static rtx
+gen_gpr_to_xmm_move_src (enum machine_mode vmode, rtx gpr)
+{
+  switch (GET_MODE_NUNITS (vmode))
+    {
+    case 1:
+      return gen_rtx_SUBREG (vmode, gpr, 0);
+    case 2:
+      return gen_rtx_VEC_CONCAT (vmode, gpr,
+				 CONST0_RTX (GET_MODE_INNER (vmode)));
+    default:
+      return gen_rtx_VEC_MERGE (vmode, gen_rtx_VEC_DUPLICATE (vmode, gpr),
+				CONST0_RTX (vmode), GEN_INT (HOST_WIDE_INT_1U));
+    }
+}
+
 /* Make vector copies for all register REGNO definitions
    and replace its uses in a chain.  */
 
@@ -684,13 +707,8 @@ general_scalar_chain::make_vector_copies (unsigned regno)
 	      }
 	    else
 	      emit_move_insn (tmp, reg);
-	    emit_insn (gen_rtx_SET
-		        (gen_rtx_SUBREG (vmode, vreg, 0),
-			 gen_rtx_VEC_MERGE (vmode,
-					    gen_rtx_VEC_DUPLICATE (vmode,
-								   tmp),
-					    CONST0_RTX (vmode),
-					    GEN_INT (HOST_WIDE_INT_1U))));
+	    emit_insn (gen_rtx_SET (gen_rtx_SUBREG (vmode, vreg, 0),
+				    gen_gpr_to_xmm_move_src (vmode, tmp)));
 	  }
 	else if (!TARGET_64BIT && smode == DImode)
 	  {
@@ -720,13 +738,8 @@ general_scalar_chain::make_vector_copies (unsigned regno)
 	      }
 	  }
 	else
-	  emit_insn (gen_rtx_SET
-		       (gen_rtx_SUBREG (vmode, vreg, 0),
-			gen_rtx_VEC_MERGE (vmode,
-					   gen_rtx_VEC_DUPLICATE (vmode,
-								  reg),
-					   CONST0_RTX (vmode),
-					   GEN_INT (HOST_WIDE_INT_1U))));
+	  emit_insn (gen_rtx_SET (gen_rtx_SUBREG (vmode, vreg, 0),
+				  gen_gpr_to_xmm_move_src (vmode, reg)));
 	rtx_insn *seq = get_insns ();
 	end_sequence ();
 	rtx_insn *insn = DF_REF_INSN (ref);
@@ -1030,11 +1043,11 @@ general_scalar_chain::convert_insn (rtx_insn *insn)
     case COMPARE:
       src = SUBREG_REG (XEXP (XEXP (src, 0), 0));
 
-      gcc_assert ((REG_P (src) && GET_MODE (src) == GET_MODE_INNER (vmode))
-		  || (SUBREG_P (src) && GET_MODE (src) == vmode));
+      gcc_assert ((REG_P (src) && GET_MODE (src) == DImode)
+		  || (SUBREG_P (src) && GET_MODE (src) == V2DImode));
 
       if (REG_P (src))
-	subreg = gen_rtx_SUBREG (vmode, src, 0);
+	subreg = gen_rtx_SUBREG (V2DImode, src, 0);
       else
 	subreg = copy_rtx_if_shared (src);
       emit_insn_before (gen_vec_interleave_lowv2di (copy_rtx_if_shared (subreg),
@@ -1275,6 +1288,10 @@ has_non_address_hard_reg (rtx_insn *insn)
 static bool
 convertible_comparison_p (rtx_insn *insn, enum machine_mode mode)
 {
+  /* ??? Currently convertible for double-word DImode chain only.  */
+  if (TARGET_64BIT || mode != DImode)
+    return false;
+
   if (!TARGET_SSE4_1)
     return false;
 
@@ -1306,12 +1323,12 @@ convertible_comparison_p (rtx_insn *insn, enum machine_mode mode)
 
   if (!SUBREG_P (op1)
       || !SUBREG_P (op2)
-      || GET_MODE (op1) != mode
-      || GET_MODE (op2) != mode
+      || GET_MODE (op1) != SImode
+      || GET_MODE (op2) != SImode
       || ((SUBREG_BYTE (op1) != 0
-	   || SUBREG_BYTE (op2) != GET_MODE_SIZE (mode))
+	   || SUBREG_BYTE (op2) != GET_MODE_SIZE (SImode))
 	  && (SUBREG_BYTE (op2) != 0
-	      || SUBREG_BYTE (op1) != GET_MODE_SIZE (mode))))
+	      || SUBREG_BYTE (op1) != GET_MODE_SIZE (SImode))))
     return false;
 
   op1 = SUBREG_REG (op1);
@@ -1319,13 +1336,13 @@ convertible_comparison_p (rtx_insn *insn, enum machine_mode mode)
 
   if (op1 != op2
       || !REG_P (op1)
-      || GET_MODE (op1) != GET_MODE_WIDER_MODE (mode).else_blk ())
+      || GET_MODE (op1) != DImode)
     return false;
 
   return true;
 }
 
-/* The DImode version of scalar_to_vector_candidate_p.  */
+/* The general version of scalar_to_vector_candidate_p.  */
 
 static bool
 general_scalar_to_vector_candidate_p (rtx_insn *insn, enum machine_mode mode)
@@ -1344,7 +1361,7 @@ general_scalar_to_vector_candidate_p (rtx_insn *insn, enum machine_mode mode)
   if (GET_CODE (src) == COMPARE)
     return convertible_comparison_p (insn, mode);
 
-  /* We are interested in DImode promotion only.  */
+  /* We are interested in "mode" only.  */
   if ((GET_MODE (src) != mode
        && !CONST_INT_P (src))
       || GET_MODE (dst) != mode)

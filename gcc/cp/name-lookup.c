@@ -4504,9 +4504,6 @@ push_class_level_binding_1 (tree name, tree x)
 		binding->type = NULL_TREE;
 	    }
 	}
-      else if (TREE_CODE (target_decl) == OVERLOAD
-	       && OVL_P (target_bval))
-	old_decl = bval;
       else if (TREE_CODE (decl) == USING_DECL
 	       && TREE_CODE (bval) == USING_DECL
 	       && same_type_p (USING_DECL_SCOPE (decl),
@@ -4525,6 +4522,9 @@ push_class_level_binding_1 (tree name, tree x)
       else if (TREE_CODE (bval) == USING_DECL
 	       && OVL_P (target_decl))
 	return true;
+      else if (OVL_P (target_decl)
+	       && OVL_P (target_bval))
+	old_decl = bval;
 
       if (old_decl && binding->scope == class_binding_level)
 	{
@@ -5559,7 +5559,7 @@ get_std_name_hint (const char *name)
     {"bitset", "<bitset>", cxx11},
     /* <complex>.  */
     {"complex", "<complex>", cxx98},
-    {"complex_literals", "<complex>", cxx98},
+    {"complex_literals", "<complex>", cxx14},
     /* <condition_variable>. */
     {"condition_variable", "<condition_variable>", cxx11},
     {"condition_variable_any", "<condition_variable>", cxx11},
@@ -5632,7 +5632,7 @@ get_std_name_hint (const char *name)
     {"allocator", "<memory>", cxx98},
     {"allocator_traits", "<memory>", cxx11},
     {"make_shared", "<memory>", cxx11},
-    {"make_unique", "<memory>", cxx11},
+    {"make_unique", "<memory>", cxx14},
     {"shared_ptr", "<memory>", cxx11},
     {"unique_ptr", "<memory>", cxx11},
     {"weak_ptr", "<memory>", cxx11},

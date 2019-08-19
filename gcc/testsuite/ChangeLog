@@ -1,3 +1,295 @@
+2019-08-19  Kito Cheng  <kito.cheng@sifive.com>
+
+	PR target/91441
+	* gcc.target/riscv/pr91441.c: New.
+
+2019-08-18  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91485
+	* gfortran.dg/pr91485.f90: New test.
+
+2019-08-17  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/82992
+	* gfortran.dg/pr71649.f90: Adjust error messages.
+	* gfortran.dg/use_15.f90: Ditto.
+	* gfortran.dg/use_rename_8.f90: Ditto.
+
+2019-08-17  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/78739
+	* fortran.dg/pr78739.f90: New test.
+
+2019-08-17  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/78719
+	* gfortran.dg/pr78719_1.f90: New test.
+	* gfortran.dg/pr78719_2.f90: Ditto.
+	* gfortran.dg/pr78719_3.f90: Ditto.
+
+2019-08-17  Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/91471
+	* gfortran.dg/pr91471.f90: New test.
+
+2019-08-16  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/85827
+	* g++.dg/cpp1z/constexpr-if29.C: New test.
+
+2019-08-16  Jeff Law  <law@redhat.com>
+
+	* gcc.target/sh/pr54236-6.c: Use -fno-tree-forwprop.
+
+2019-08-16  Martin Sebor  <msebor@redhat.com>
+
+	* gcc.dg/struct-ret-1.c: Enable on all targets.
+
+2019-08-16  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gnat.dg/opt81.ad[sb]: New test.
+
+2019-08-16  Martin Sebor  <msebor@redhat.com>
+
+	PR testsuite/91458
+	* g++.dg/tree-ssa/pr19807.C: Use the same search pattern
+	unconditionally (correcting r272199, PR middle-end/90676).
+
+2019-08-16  Richard Biener  <rguenther@suse.de>
+
+	PR target/91469
+	* gcc.target/i386/pr91469-1.c: New testcase.
+	* gcc.target/i386/pr91469-2.c: Likewise.
+
+2019-08-16  Mark Eggleston <mark.eggleston@codethink.com>
+
+	* gfortran.dg/auto_in_equiv_1.f90: New test.
+	* gfortran.dg/auto_in_equiv_2.f90: New test.
+	* gfortran.dg/auto_in_equiv_3.f90: New test.
+
+2019-08-16  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/tree-ssa/forwprop-31.c: Adjust.
+
+2019-08-16  Martin Liska  <mliska@suse.cz>
+
+	PR ipa/91447
+	* g++.dg/ipa/ipa-icf-4.C: Add -missed for target that
+	don't have aliases.
+
+2019-08-16  Alexandre Oliva <oliva@adacore.com>
+
+	* gcc.target/i386/pr85044.c: Require support for trampolines.
+
+	* gcc.target/i386/asm-4.c: Use amd64 natural addressing mode
+	on all __LP64__ targets.
+
+	* gcc.target/arc/interrupt-6.c: Use __builtin_alloca, require
+	effective target support for alloca, drop include of alloca.h.
+	* gcc.target/i386/pr80969-3.c: Likewise.
+	* gcc.target/sparc/setjmp-1.c: Likewise.
+	* gcc.target/x86_64/abi/ms-sysv/gen.cc: Likewise.
+	* gcc.target/x86_64/abi/ms-sysv/ms-sysv.c: Likewise.
+
+	* gcc.misc-tests/options.exp: Match /ld and -ld besides
+	/collect2.
+
+2019-08-15  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR fortran/91443
+	* gfortran.dg/argument_checking_19.f90: New test.
+	* gfortran.dg/altreturn_10.f90: Change dg-warning to dg-error.
+	* gfortran.dg/dec_union_11.f90: Add -std=legacy.
+	* gfortran.dg/hollerith8.f90: Likewise. Remove warning for
+	Hollerith constant.
+	* gfortran.dg/integer_exponentiation_2.f90: New subroutine gee_i8;
+	use it to avoid type mismatches.
+	* gfortran.dg/pr41011.f: Add -std=legacy.
+	* gfortran.dg/whole_file_1.f90: Change warnings to errors.
+	* gfortran.dg/whole_file_2.f90: Likewise.
+
+2019-08-15  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91445
+	* gcc.dg/torture/pr91445.c: New testcase.
+
+2019-08-15  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/pr80170.c: Adjust to use __SIZETYPE__.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/loop_add_4.c: Expect 10 INCWs and
+	INCDs rather than 8.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/revb_1.c: Restrict to little-endian targets.
+	Avoid including stdint.h.
+	* gcc.target/aarch64/sve/revh_1.c: Likewise.
+	* gcc.target/aarch64/sve/revw_1.c: Likewise.
+	* gcc.target/aarch64/sve/revb_2.c: New big-endian test.
+	* gcc.target/aarch64/sve/revh_2.c: Likewise.
+	* gcc.target/aarch64/sve/revw_2.c: Likewise.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Kugan Vivekanandarajah  <kugan.vivekanandarajah@linaro.org>
+
+	* gcc.target/aarch64/sve/cond_mla_5.c: Allow FMAD as well as FMLA
+	and FMSB as well as FMLS.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/ext_2.c: Expect a MOVPRFX.
+	* gcc.target/aarch64/sve/ext_3.c: New test.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Prathamesh Kulkarni  <prathamesh.kulkarni@linaro.org>
+
+	* gcc.target/aarch64/sve/shift_1.c: Accept reversed shifts.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Kugan Vivekanandarajah  <kugan.vivekanandarajah@linaro.org>
+
+	* gcc.target/aarch64/sve/cond_mla_1.c: New test.
+	* gcc.target/aarch64/sve/cond_mla_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_5.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_5_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_6.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_6_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_7.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_7_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_8.c: Likewise.
+	* gcc.target/aarch64/sve/cond_mla_8_run.c: Likewise.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Kugan Vivekanandarajah  <kugan.vivekanandarajah@linaro.org>
+
+	* gcc.target/aarch64/sve/cond_fadd_1.c: New test.
+	* gcc.target/aarch64/sve/cond_fadd_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fadd_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fadd_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fadd_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fadd_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fadd_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fadd_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_1.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fsubr_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_1.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmaxnm_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_1.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fminnm_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_1.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fmul_4_run.c: Likewise.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Kugan Vivekanandarajah  <kugan.vivekanandarajah@linaro.org>
+
+	* gcc.target/aarch64/sve/cond_fabd_1.c: New test.
+	* gcc.target/aarch64/sve/cond_fabd_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_5.c: Likewise.
+	* gcc.target/aarch64/sve/cond_fabd_5_run.c: Likewise.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Kugan Vivekanandarajah  <kugan.vivekanandarajah@linaro.org>
+
+	* gcc.target/aarch64/sve/cond_abd_1.c: New test.
+	* gcc.target/aarch64/sve/cond_abd_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_5.c: Likewise.
+	* gcc.target/aarch64/sve/cond_abd_5_run.c: Likewise.
+
+2019-08-15  Richard Sandiford  <richard.sandiford@arm.com>
+	    Prathamesh Kulkarni  <prathamesh.kulkarni@linaro.org>
+
+	* gcc.target/aarch64/sve/cond_shift_1.c: New test.
+	* gcc.target/aarch64/sve/cond_shift_1_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_2.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_2_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_3.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_3_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_4.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_4_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_5.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_5_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_6.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_6_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_7.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_7_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_8.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_8_run.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_9.c: Likewise.
+	* gcc.target/aarch64/sve/cond_shift_9_run.c: Likewise.
+
+2019-08-14  Martin Sebor  <msebor@redhat.com>
+
+	PR testsuite/91449
+	* gcc.dg/strlenopt-73.c: Restrict 128-bit tests to i386.
+
+2019-08-14  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR c++/91436
+	* g++.dg/lookup/missing-std-include-5.C: Limit test to C++14 and up.
+	* g++.dg/lookup/missing-std-include-6.C: Don't check make_unique in
+	test that runs for C++11.
+	* g++.dg/lookup/missing-std-include-8.C: Check make_unique here.
+
+2019-08-14  Christophe Lyon  <christophe.lyon@linaro.org>
+
+	* gcc.c-torture/execute/noinit-attribute.c: Fix typo.
+
+2019-08-14  Martin Sebor  <msebor@redhat.com>
+
+	PR tree-optimization/91294
+	* gcc.dg/strlenopt-44.c: Adjust tested result.
+	* gcc.dg/strlenopt-70.c: Avoid exercising unimplemnted optimization.
+	* gcc.dg/strlenopt-73.c: New test.
+	* gcc.dg/strlenopt-74.c: New test.
+	* gcc.dg/strlenopt-75.c: New test.
+	* gcc.dg/strlenopt-76.c: New test.
+	* gcc.dg/strlenopt-77.c: New test.
+
 2019-08-14  Jakub Jelinek  <jakub@redhat.com>
 	    Marek Polacek  <polacek@redhat.com>
 

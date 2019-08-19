@@ -1,3 +1,29 @@
+2019-08-15  Jason Merrill  <jason@redhat.com>
+
+	PR c++/90393 - ICE with thow in ?:
+
+	PR c++/64372, DR 1560 - Gratuitous lvalue-to-rvalue conversion in ?:
+	* tree.c (lvalue_kind): Handle throw in one arm.
+	* typeck.c (rationalize_conditional_expr): Likewise.
+	(cp_build_modify_expr): Likewise.
+
+2019-08-14  Jason Merrill  <jason@redhat.com>
+
+	Implement P0848R3, Conditionally Trivial Special Member Functions.
+	* tree.c (special_memfn_p): New.
+	* class.c (add_method): When overloading, hide ineligible special
+	member fns.
+	(check_methods): Set TYPE_HAS_COMPLEX_* here.
+	* decl.c (grok_special_member_properties): Not here.
+	* name-lookup.c (push_class_level_binding_1): Move overloaded
+	functions case down, accept FUNCTION_DECL as target_decl.
+
+2019-08-14  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR c++/91436
+	* name-lookup.c (get_std_name_hint): Fix min_dialect field for
+	complex_literals and make_unique entries.
+
 2019-08-14  Jakub Jelinek  <jakub@redhat.com>
 	    Marek Polacek  <polacek@redhat.com>
 

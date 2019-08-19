@@ -73,6 +73,7 @@
 #include "selftest-rtl.h"
 #include "rtx-vector-builder.h"
 #include "intl.h"
+#include "expmed.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -1605,6 +1606,14 @@ aarch64_vector_data_mode_p (machine_mode mode)
   return aarch64_classify_vector_mode (mode) & VEC_ANY_DATA;
 }
 
+/* Return true if MODE is any form of SVE mode, including predicates,
+   vectors and structures.  */
+bool
+aarch64_sve_mode_p (machine_mode mode)
+{
+  return aarch64_classify_vector_mode (mode) & VEC_ANY_SVE;
+}
+
 /* Return true if MODE is an SVE data vector mode; either a single vector
    or a structure of vectors.  */
 static bool
@@ -1675,6 +1684,22 @@ aarch64_get_mask_mode (poly_uint64 nunits, poly_uint64 nbytes)
   return default_get_mask_mode (nunits, nbytes);
 }
 
+/* Return the SVE vector mode that has NUNITS elements of mode INNER_MODE.  */
+
+static opt_machine_mode
+aarch64_sve_data_mode (scalar_mode inner_mode, poly_uint64 nunits)
+{
+  enum mode_class mclass = (is_a <scalar_float_mode> (inner_mode)
+			    ? MODE_VECTOR_FLOAT : MODE_VECTOR_INT);
+  machine_mode mode;
+  FOR_EACH_MODE_IN_CLASS (mode, mclass)
+    if (inner_mode == GET_MODE_INNER (mode)
+	&& known_eq (nunits, GET_MODE_NUNITS (mode))
+	&& aarch64_sve_data_mode_p (mode))
+      return mode;
+  return opt_machine_mode ();
+}
+
 /* Return the integer element mode associated with SVE mode MODE.  */
 
 static scalar_int_mode
@@ -1683,6 +1708,17 @@ aarch64_sve_element_int_mode (machine_mode mode)
   unsigned int elt_bits = vector_element_size (BITS_PER_SVE_VECTOR,
 					       GET_MODE_NUNITS (mode));
   return int_mode_for_size (elt_bits, 0).require ();
+}
+
+/* Return the integer vector mode associated with SVE mode MODE.
+   Unlike mode_for_int_vector, this can handle the case in which
+   MODE is a predicate (and thus has a different total size).  */
+
+static machine_mode
+aarch64_sve_int_mode (machine_mode mode)
+{
+  scalar_int_mode int_mode = aarch64_sve_element_int_mode (mode);
+  return aarch64_sve_data_mode (int_mode, GET_MODE_NUNITS (mode)).require ();
 }
 
 /* Implement TARGET_PREFERRED_ELSE_VALUE.  For binary operations,
@@ -2874,16 +2910,17 @@ aarch64_sve_cnt_immediate_p (rtx x)
    operand (a vector pattern followed by a multiplier in the range [1, 16]).
    PREFIX is the mnemonic without the size suffix and OPERANDS is the
    first part of the operands template (the part that comes before the
-   vector size itself).  FACTOR is the number of quadwords.
-   NELTS_PER_VQ, if nonzero, is the number of elements in each quadword.
-   If it is zero, we can use any element size.  */
+   vector size itself).  PATTERN is the pattern to use.  FACTOR is the
+   number of quadwords.  NELTS_PER_VQ, if nonzero, is the number of elements
+   in each quadword.  If it is zero, we can use any element size.  */
 
 static char *
 aarch64_output_sve_cnt_immediate (const char *prefix, const char *operands,
+				  aarch64_svpattern pattern,
 				  unsigned int factor,
 				  unsigned int nelts_per_vq)
 {
-  static char buffer[sizeof ("sqincd\t%x0, %w0, all, mul #16")];
+  static char buffer[sizeof ("sqincd\t%x0, %w0, vl256, mul #16")];
 
   if (nelts_per_vq == 0)
     /* There is some overlap in the ranges of the four CNT instructions.
@@ -2896,12 +2933,16 @@ aarch64_output_sve_cnt_immediate (const char *prefix, const char *operands,
 
   factor >>= shift;
   unsigned int written;
-  if (factor == 1)
+  if (pattern == AARCH64_SV_ALL && factor == 1)
     written = snprintf (buffer, sizeof (buffer), "%s%c\t%s",
 			prefix, suffix, operands);
+  else if (factor == 1)
+    written = snprintf (buffer, sizeof (buffer), "%s%c\t%s, %s",
+			prefix, suffix, operands, svpattern_token (pattern));
   else
-    written = snprintf (buffer, sizeof (buffer), "%s%c\t%s, all, mul #%d",
-			prefix, suffix, operands, factor);
+    written = snprintf (buffer, sizeof (buffer), "%s%c\t%s, %s, mul #%d",
+			prefix, suffix, operands, svpattern_token (pattern),
+			factor);
   gcc_assert (written < sizeof (buffer));
   return buffer;
 }
@@ -2911,7 +2952,8 @@ aarch64_output_sve_cnt_immediate (const char *prefix, const char *operands,
    PREFIX is the mnemonic without the size suffix and OPERANDS is the
    first part of the operands template (the part that comes before the
    vector size itself).  X is the value of the vector size operand,
-   as a polynomial integer rtx.  */
+   as a polynomial integer rtx; we need to convert this into an "all"
+   pattern with a multiplier.  */
 
 char *
 aarch64_output_sve_cnt_immediate (const char *prefix, const char *operands,
@@ -2919,8 +2961,35 @@ aarch64_output_sve_cnt_immediate (const char *prefix, const char *operands,
 {
   poly_int64 value = rtx_to_poly_int64 (x);
   gcc_assert (aarch64_sve_cnt_immediate_p (value));
-  return aarch64_output_sve_cnt_immediate (prefix, operands,
+  return aarch64_output_sve_cnt_immediate (prefix, operands, AARCH64_SV_ALL,
 					   value.coeffs[1], 0);
+}
+
+/* Return true if we can add X using a single SVE INC or DEC instruction.  */
+
+bool
+aarch64_sve_scalar_inc_dec_immediate_p (rtx x)
+{
+  poly_int64 value;
+  return (poly_int_rtx_p (x, &value)
+	  && (aarch64_sve_cnt_immediate_p (value)
+	      || aarch64_sve_cnt_immediate_p (-value)));
+}
+
+/* Return the asm string for adding SVE INC/DEC immediate OFFSET to
+   operand 0.  */
+
+char *
+aarch64_output_sve_scalar_inc_dec (rtx offset)
+{
+  poly_int64 offset_value = rtx_to_poly_int64 (offset);
+  gcc_assert (offset_value.coeffs[0] == offset_value.coeffs[1]);
+  if (offset_value.coeffs[1] > 0)
+    return aarch64_output_sve_cnt_immediate ("inc", "%x0", AARCH64_SV_ALL,
+					     offset_value.coeffs[1], 0);
+  else
+    return aarch64_output_sve_cnt_immediate ("dec", "%x0", AARCH64_SV_ALL,
+					     -offset_value.coeffs[1], 0);
 }
 
 /* Return true if we can add VALUE to a register using a single ADDVL
@@ -2948,26 +3017,15 @@ aarch64_sve_addvl_addpl_immediate_p (rtx x)
 	  && aarch64_sve_addvl_addpl_immediate_p (value));
 }
 
-/* Return the asm string for adding ADDVL or ADDPL immediate X to operand 1
-   and storing the result in operand 0.  */
+/* Return the asm string for adding ADDVL or ADDPL immediate OFFSET
+   to operand 1 and storing the result in operand 0.  */
 
 char *
-aarch64_output_sve_addvl_addpl (rtx dest, rtx base, rtx offset)
+aarch64_output_sve_addvl_addpl (rtx offset)
 {
   static char buffer[sizeof ("addpl\t%x0, %x1, #-") + 3 * sizeof (int)];
   poly_int64 offset_value = rtx_to_poly_int64 (offset);
   gcc_assert (aarch64_sve_addvl_addpl_immediate_p (offset_value));
-
-  /* Use INC or DEC if possible.  */
-  if (rtx_equal_p (dest, base) && GP_REGNUM_P (REGNO (dest)))
-    {
-      if (aarch64_sve_cnt_immediate_p (offset_value))
-	return aarch64_output_sve_cnt_immediate ("inc", "%x0",
-						 offset_value.coeffs[1], 0);
-      if (aarch64_sve_cnt_immediate_p (-offset_value))
-	return aarch64_output_sve_cnt_immediate ("dec", "%x0",
-						 -offset_value.coeffs[1], 0);
-    }
 
   int factor = offset_value.coeffs[1];
   if ((factor & 15) == 0)
@@ -2983,8 +3041,8 @@ aarch64_output_sve_addvl_addpl (rtx dest, rtx base, rtx offset)
    factor in *FACTOR_OUT (if nonnull).  */
 
 bool
-aarch64_sve_inc_dec_immediate_p (rtx x, int *factor_out,
-				 unsigned int *nelts_per_vq_out)
+aarch64_sve_vector_inc_dec_immediate_p (rtx x, int *factor_out,
+					unsigned int *nelts_per_vq_out)
 {
   rtx elt;
   poly_int64 value;
@@ -3018,9 +3076,9 @@ aarch64_sve_inc_dec_immediate_p (rtx x, int *factor_out,
    instruction.  */
 
 bool
-aarch64_sve_inc_dec_immediate_p (rtx x)
+aarch64_sve_vector_inc_dec_immediate_p (rtx x)
 {
-  return aarch64_sve_inc_dec_immediate_p (x, NULL, NULL);
+  return aarch64_sve_vector_inc_dec_immediate_p (x, NULL, NULL);
 }
 
 /* Return the asm template for an SVE vector INC or DEC instruction.
@@ -3028,18 +3086,18 @@ aarch64_sve_inc_dec_immediate_p (rtx x)
    value of the vector count operand itself.  */
 
 char *
-aarch64_output_sve_inc_dec_immediate (const char *operands, rtx x)
+aarch64_output_sve_vector_inc_dec (const char *operands, rtx x)
 {
   int factor;
   unsigned int nelts_per_vq;
-  if (!aarch64_sve_inc_dec_immediate_p (x, &factor, &nelts_per_vq))
+  if (!aarch64_sve_vector_inc_dec_immediate_p (x, &factor, &nelts_per_vq))
     gcc_unreachable ();
   if (factor < 0)
-    return aarch64_output_sve_cnt_immediate ("dec", operands, -factor,
-					     nelts_per_vq);
+    return aarch64_output_sve_cnt_immediate ("dec", operands, AARCH64_SV_ALL,
+					     -factor, nelts_per_vq);
   else
-    return aarch64_output_sve_cnt_immediate ("inc", operands, factor,
-					     nelts_per_vq);
+    return aarch64_output_sve_cnt_immediate ("inc", operands, AARCH64_SV_ALL,
+					     factor, nelts_per_vq);
 }
 
 static int
@@ -3422,20 +3480,36 @@ aarch64_add_offset (scalar_int_mode mode, rtx dest, rtx src,
 	}
       else
 	{
-	  /* Use CNTD, then multiply it by FACTOR.  */
-	  val = gen_int_mode (poly_int64 (2, 2), mode);
+	  /* Base the factor on LOW_BIT if we can calculate LOW_BIT
+	     directly, since that should increase the chances of being
+	     able to use a shift and add sequence.  If LOW_BIT itself
+	     is out of range, just use CNTD.  */
+	  if (low_bit <= 16 * 8)
+	    factor /= low_bit;
+	  else
+	    low_bit = 1;
+
+	  val = gen_int_mode (poly_int64 (low_bit * 2, low_bit * 2), mode);
 	  val = aarch64_force_temporary (mode, temp1, val);
 
-	  /* Go back to using a negative multiplication factor if we have
-	     no register from which to subtract.  */
-	  if (code == MINUS && src == const0_rtx)
+	  if (can_create_pseudo_p ())
 	    {
-	      factor = -factor;
-	      code = PLUS;
+	      rtx coeff1 = gen_int_mode (factor, mode);
+	      val = expand_mult (mode, val, coeff1, NULL_RTX, false, true);
 	    }
-	  rtx coeff1 = gen_int_mode (factor, mode);
-	  coeff1 = aarch64_force_temporary (mode, temp2, coeff1);
-	  val = gen_rtx_MULT (mode, val, coeff1);
+	  else
+	    {
+	      /* Go back to using a negative multiplication factor if we have
+		 no register from which to subtract.  */
+	      if (code == MINUS && src == const0_rtx)
+		{
+		  factor = -factor;
+		  code = PLUS;
+		}
+	      rtx coeff1 = gen_int_mode (factor, mode);
+	      coeff1 = aarch64_force_temporary (mode, temp2, coeff1);
+	      val = gen_rtx_MULT (mode, val, coeff1);
+	    }
 	}
 
       if (shift > 0)
@@ -4280,14 +4354,29 @@ aarch64_replace_reg_mode (rtx x, machine_mode mode)
   return x;
 }
 
+/* Return the SVE REV[BHW] unspec for reversing quantites of mode MODE
+   stored in wider integer containers.  */
+
+static unsigned int
+aarch64_sve_rev_unspec (machine_mode mode)
+{
+  switch (GET_MODE_UNIT_SIZE (mode))
+    {
+    case 1: return UNSPEC_REVB;
+    case 2: return UNSPEC_REVH;
+    case 4: return UNSPEC_REVW;
+    }
+  gcc_unreachable ();
+}
+
 /* Split a *aarch64_sve_mov<mode>_subreg_be pattern with the given
    operands.  */
 
 void
 aarch64_split_sve_subreg_move (rtx dest, rtx ptrue, rtx src)
 {
-  /* Decide which REV operation we need.  The mode with narrower elements
-     determines the mode of the operands and the mode with the wider
+  /* Decide which REV operation we need.  The mode with wider elements
+     determines the mode of the operands and the mode with the narrower
      elements determines the reverse width.  */
   machine_mode mode_with_wider_elts = GET_MODE (dest);
   machine_mode mode_with_narrower_elts = GET_MODE (src);
@@ -4295,30 +4384,16 @@ aarch64_split_sve_subreg_move (rtx dest, rtx ptrue, rtx src)
       < GET_MODE_UNIT_SIZE (mode_with_narrower_elts))
     std::swap (mode_with_wider_elts, mode_with_narrower_elts);
 
+  unsigned int unspec = aarch64_sve_rev_unspec (mode_with_narrower_elts);
   unsigned int wider_bytes = GET_MODE_UNIT_SIZE (mode_with_wider_elts);
-  unsigned int unspec;
-  if (wider_bytes == 8)
-    unspec = UNSPEC_REV64;
-  else if (wider_bytes == 4)
-    unspec = UNSPEC_REV32;
-  else if (wider_bytes == 2)
-    unspec = UNSPEC_REV16;
-  else
-    gcc_unreachable ();
   machine_mode pred_mode = aarch64_sve_pred_mode (wider_bytes).require ();
 
-  /* Emit:
-
-       (set DEST (unspec [PTRUE (unspec [SRC] UNSPEC_REV<nn>)] UNSPEC_PRED_X))
-
-     with the appropriate modes.  */
+  /* Get the operands in the appropriate modes and emit the instruction.  */
   ptrue = gen_lowpart (pred_mode, ptrue);
-  dest = aarch64_replace_reg_mode (dest, mode_with_narrower_elts);
-  src = aarch64_replace_reg_mode (src, mode_with_narrower_elts);
-  src = gen_rtx_UNSPEC (mode_with_narrower_elts, gen_rtvec (1, src), unspec);
-  src = gen_rtx_UNSPEC (mode_with_narrower_elts, gen_rtvec (2, ptrue, src),
-			UNSPEC_PRED_X);
-  emit_insn (gen_rtx_SET (dest, src));
+  dest = aarch64_replace_reg_mode (dest, mode_with_wider_elts);
+  src = aarch64_replace_reg_mode (src, mode_with_wider_elts);
+  emit_insn (gen_aarch64_pred (unspec, mode_with_wider_elts,
+			       dest, ptrue, src));
 }
 
 static bool
@@ -8289,6 +8364,8 @@ aarch64_print_vector_float_operand (FILE *f, rtx x, bool negate)
      fixed form in the assembly syntax.  */
   if (real_equal (&r, &dconst0))
     asm_fprintf (f, "0.0");
+  else if (real_equal (&r, &dconst2))
+    asm_fprintf (f, "2.0");
   else if (real_equal (&r, &dconst1))
     asm_fprintf (f, "1.0");
   else if (real_equal (&r, &dconsthalf))
@@ -15205,11 +15282,10 @@ aarch64_sve_float_mul_immediate_p (rtx x)
 {
   rtx elt;
 
-  /* GCC will never generate a multiply with an immediate of 2, so there is no
-     point testing for it (even though it is a valid constant).  */
   return (const_vec_duplicate_p (x, &elt)
 	  && GET_CODE (elt) == CONST_DOUBLE
-	  && real_equal (CONST_DOUBLE_REAL_VALUE (elt), &dconsthalf));
+	  && (real_equal (CONST_DOUBLE_REAL_VALUE (elt), &dconsthalf)
+	      || real_equal (CONST_DOUBLE_REAL_VALUE (elt), &dconst2)));
 }
 
 /* Return true if replicating VAL32 is a valid 2-byte or 4-byte immediate
@@ -15847,11 +15923,13 @@ aarch64_simd_attr_length_rglist (machine_mode mode)
 static HOST_WIDE_INT
 aarch64_simd_vector_alignment (const_tree type)
 {
+  /* ??? Checking the mode isn't ideal, but VECTOR_BOOLEAN_TYPE_P can
+     be set for non-predicate vectors of booleans.  Modes are the most
+     direct way we have of identifying real SVE predicate types.  */
+  if (GET_MODE_CLASS (TYPE_MODE (type)) == MODE_VECTOR_BOOL)
+    return 16;
   if (TREE_CODE (TYPE_SIZE (type)) != INTEGER_CST)
-    /* ??? Checking the mode isn't ideal, but VECTOR_BOOLEAN_TYPE_P can
-       be set for non-predicate vectors of booleans.  Modes are the most
-       direct way we have of identifying real SVE predicate types.  */
-    return GET_MODE_CLASS (TYPE_MODE (type)) == MODE_VECTOR_BOOL ? 16 : 128;
+    return 128;
   return wi::umin (wi::to_wide (TYPE_SIZE (type)), 128).to_uhwi ();
 }
 
@@ -16466,6 +16544,98 @@ aarch64_sve_expand_vector_init (rtx target, rtx vals)
   if (nelts < 4
       || !aarch64_sve_expand_vector_init (target, v, nelts, nelts))
     aarch64_sve_expand_vector_init_insert_elems (target, v, nelts);
+}
+
+/* Check whether VALUE is a vector constant in which every element
+   is either a power of 2 or a negated power of 2.  If so, return
+   a constant vector of log2s, and flip CODE between PLUS and MINUS
+   if VALUE contains negated powers of 2.  Return NULL_RTX otherwise.  */
+
+static rtx
+aarch64_convert_mult_to_shift (rtx value, rtx_code &code)
+{
+  if (GET_CODE (value) != CONST_VECTOR)
+    return NULL_RTX;
+
+  rtx_vector_builder builder;
+  if (!builder.new_unary_operation (GET_MODE (value), value, false))
+    return NULL_RTX;
+
+  scalar_mode int_mode = GET_MODE_INNER (GET_MODE (value));
+  /* 1 if the result of the multiplication must be negated,
+     0 if it mustn't, or -1 if we don't yet care.  */
+  int negate = -1;
+  unsigned int encoded_nelts = const_vector_encoded_nelts (value);
+  for (unsigned int i = 0; i < encoded_nelts; ++i)
+    {
+      rtx elt = CONST_VECTOR_ENCODED_ELT (value, i);
+      if (!CONST_SCALAR_INT_P (elt))
+	return NULL_RTX;
+      rtx_mode_t val (elt, int_mode);
+      wide_int pow2 = wi::neg (val);
+      if (val != pow2)
+	{
+	  /* It matters whether we negate or not.  Make that choice,
+	     and make sure that it's consistent with previous elements.  */
+	  if (negate == !wi::neg_p (val))
+	    return NULL_RTX;
+	  negate = wi::neg_p (val);
+	  if (!negate)
+	    pow2 = val;
+	}
+      /* POW2 is now the value that we want to be a power of 2.  */
+      int shift = wi::exact_log2 (pow2);
+      if (shift < 0)
+	return NULL_RTX;
+      builder.quick_push (gen_int_mode (shift, int_mode));
+    }
+  if (negate == -1)
+    /* PLUS and MINUS are equivalent; canonicalize on PLUS.  */
+    code = PLUS;
+  else if (negate == 1)
+    code = code == PLUS ? MINUS : PLUS;
+  return builder.build ();
+}
+
+/* Prepare for an integer SVE multiply-add or multiply-subtract pattern;
+   CODE is PLUS for the former and MINUS for the latter.  OPERANDS is the
+   operands array, in the same order as for fma_optab.  Return true if
+   the function emitted all the necessary instructions, false if the caller
+   should generate the pattern normally with the new OPERANDS array.  */
+
+bool
+aarch64_prepare_sve_int_fma (rtx *operands, rtx_code code)
+{
+  machine_mode mode = GET_MODE (operands[0]);
+  if (rtx shifts = aarch64_convert_mult_to_shift (operands[2], code))
+    {
+      rtx product = expand_binop (mode, vashl_optab, operands[1], shifts,
+				  NULL_RTX, true, OPTAB_DIRECT);
+      force_expand_binop (mode, code == PLUS ? add_optab : sub_optab,
+			  operands[3], product, operands[0], true,
+			  OPTAB_DIRECT);
+      return true;
+    }
+  operands[2] = force_reg (mode, operands[2]);
+  return false;
+}
+
+/* Likewise, but for a conditional pattern.  */
+
+bool
+aarch64_prepare_sve_cond_int_fma (rtx *operands, rtx_code code)
+{
+  machine_mode mode = GET_MODE (operands[0]);
+  if (rtx shifts = aarch64_convert_mult_to_shift (operands[3], code))
+    {
+      rtx product = expand_binop (mode, vashl_optab, operands[2], shifts,
+				  NULL_RTX, true, OPTAB_DIRECT);
+      emit_insn (gen_cond (code, mode, operands[0], operands[1],
+			   operands[4], product, operands[5]));
+      return true;
+    }
+  operands[3] = force_reg (mode, operands[3]);
+  return false;
 }
 
 static unsigned HOST_WIDE_INT
@@ -17660,13 +17830,31 @@ aarch64_evpc_rev_local (struct expand_vec_perm_d *d)
   if (d->testing_p)
     return true;
 
-  rtx src = gen_rtx_UNSPEC (d->vmode, gen_rtvec (1, d->op0), unspec);
   if (d->vec_flags == VEC_SVE_DATA)
     {
-      rtx pred = aarch64_ptrue_reg (pred_mode);
-      src = gen_rtx_UNSPEC (d->vmode, gen_rtvec (2, pred, src),
-			    UNSPEC_PRED_X);
+      machine_mode int_mode = aarch64_sve_int_mode (pred_mode);
+      rtx target = gen_reg_rtx (int_mode);
+      if (BYTES_BIG_ENDIAN)
+	/* The act of taking a subreg between INT_MODE and d->vmode
+	   is itself a reversing operation on big-endian targets;
+	   see the comment at the head of aarch64-sve.md for details.
+	   First reinterpret OP0 as INT_MODE without using a subreg
+	   and without changing the contents.  */
+	emit_insn (gen_aarch64_sve_reinterpret (int_mode, target, d->op0));
+      else
+	{
+	  /* For SVE we use REV[BHW] unspecs derived from the element size
+	     of v->mode and vector modes whose elements have SIZE bytes.
+	     This ensures that the vector modes match the predicate modes.  */
+	  int unspec = aarch64_sve_rev_unspec (d->vmode);
+	  rtx pred = aarch64_ptrue_reg (pred_mode);
+	  emit_insn (gen_aarch64_pred (unspec, int_mode, target, pred,
+				       gen_lowpart (int_mode, d->op0)));
+	}
+      emit_move_insn (d->target, gen_lowpart (d->vmode, target));
+      return true;
     }
+  rtx src = gen_rtx_UNSPEC (d->vmode, gen_rtvec (1, d->op0), unspec);
   emit_set_insn (d->target, src);
   return true;
 }
@@ -19782,12 +19970,8 @@ aarch64_select_early_remat_modes (sbitmap modes)
   /* SVE values are not normally live across a call, so it should be
      worth doing early rematerialization even in VL-specific mode.  */
   for (int i = 0; i < NUM_MACHINE_MODES; ++i)
-    {
-      machine_mode mode = (machine_mode) i;
-      unsigned int vec_flags = aarch64_classify_vector_mode (mode);
-      if (vec_flags & VEC_ANY_SVE)
-	bitmap_set_bit (modes, i);
-    }
+    if (aarch64_sve_mode_p ((machine_mode) i))
+      bitmap_set_bit (modes, i);
 }
 
 /* Override the default target speculation_safe_value.  */
