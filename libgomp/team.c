@@ -178,6 +178,7 @@ gomp_new_team (unsigned nthreads)
 #endif
       gomp_barrier_init (&team->barrier, nthreads);
       gomp_mutex_init (&team->task_lock);
+      gomp_mutex_init (&team->barrier_lock);
 
       team->nthreads = nthreads;
     }
@@ -220,6 +221,7 @@ free_team (struct gomp_team *team)
 #endif
   gomp_barrier_destroy (&team->barrier);
   gomp_mutex_destroy (&team->task_lock);
+  gomp_mutex_destroy (&team->barrier_lock);
   priority_queue_free (&team->task_queue);
   free (team);
 }

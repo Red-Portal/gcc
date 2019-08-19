@@ -411,8 +411,9 @@ enum gomp_task_kind
 /* States are used to track who and when a task should be freed. */
 enum gomp_task_state
 {
-  /* Default state */
-  GOMP_STATE_DEFAULT,
+  /* Some tasks are depending on this task. This task thus shouldn't be freed 
+     yet before the children mark is as GOMP_STATE_FREE */
+  GOMP_STATE_ALIVE,
 
   /* The task is done executing. It can be freed once no thread is waiting
      in its semaphore and no children are left. */
@@ -420,7 +421,7 @@ enum gomp_task_state
 
   /* No thread is waiting on the task's semaphore and no children are left.
      The task is free to go. */
-  GOMP_STATE_WOKEN
+  GOMP_STATE_FREE
 };
 
 struct gomp_task_depend_entry
@@ -603,6 +604,9 @@ struct gomp_team
 
   /* This barrier is used for most synchronization of the team.  */
   gomp_barrier_t barrier;
+
+  /* Lock for synchronizing barrier state. */
+  gomp_mutex_t barrier_lock;
 
   /* Initial work shares, to avoid allocating any gomp_work_share
      structs in the common case.  */
@@ -1235,6 +1239,76 @@ task_to_priority_node (struct gomp_task *task)
 {
   return (struct priority_node *)
       ((char *) task + offsetof (struct gomp_task, pnode));
+}
+
+static inline struct gomp_task *
+gomp_dequeue_task (struct gomp_team *team)
+{
+  struct gomp_task *task = NULL;
+
+  if (__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) == 0)
+    return NULL;
+
+  gomp_mutex_lock (&team->task_lock);
+
+#if _LIBGOMP_CHECKING_
+  priority_queue_verify (&team->task_queue, false);
+#endif
+
+  if (__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) == 0)
+    {
+    exit:;
+      gomp_mutex_unlock (&team->task_lock);
+      return NULL;
+    }
+
+  if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
+    goto exit;
+
+  task = priority_queue_next_task (&team->task_queue);
+
+  if (__atomic_load_n (&task->kind, MEMMODEL_ACQUIRE) != GOMP_TASK_WAITING)
+    goto exit;
+
+  priority_queue_remove (&team->task_queue, task, MEMMODEL_RELAXED);
+  if (__atomic_sub_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL) == 0)
+  {
+    /* Deadlock is not possible since the queue lock is not held in a
+       barrier_lock region. */
+    gomp_mutex_lock (&team->barrier_lock);
+    gomp_team_barrier_clear_task_pending (&team->barrier);
+    gomp_mutex_unlock (&team->barrier_lock);
+  }
+
+#if _LIBGOMP_CHECKING_
+  bool queue_count_zero
+    = __atomic_load_n (&team->task_queued_count, MEMMODEL_RELAXED) == 0;
+  bool queue_empty
+    = priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED);
+
+  if ((queue_count_zero && !queue_empty)
+      || (!queue_count_zero && queue_empty))
+    gomp_fatal (
+      "gomp_dequeue_task: task_queued_count and task_queue do not match");
+#endif
+
+  task->pnode.next = NULL;
+  task->pnode.prev = NULL;
+  gomp_mutex_unlock (&team->task_lock);
+  return task;
+}
+
+static inline void
+gomp_enqueue_task (struct gomp_task *task, struct gomp_team *team,
+		   int priority)
+{
+  gomp_mutex_lock (&team->task_lock);
+  __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
+  priority_queue_insert (&team->task_queue, task, priority,
+			 PRIORITY_INSERT_END,
+			 task->parent_depends_on);
+  gomp_mutex_unlock (&team->task_lock);
+  return;
 }
 
 #ifdef LIBGOMP_USE_PTHREADS

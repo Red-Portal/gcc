@@ -77,7 +77,7 @@ gomp_init_task (struct gomp_task *task, struct gomp_task *parent_task,
   task->parent = parent_task;
   task->icv = *prev_icv;
   task->kind = GOMP_TASK_IMPLICIT;
-  task->state = GOMP_STATE_DEFAULT;
+  task->state = GOMP_STATE_FREE;
   task->taskwait = NULL;
   task->in_tied_task = false;
   task->final_task = false;
@@ -178,6 +178,7 @@ gomp_task_handle_depend (struct gomp_task *task, struct gomp_task *parent,
   task->num_dependees = 0;
 
   gomp_mutex_lock (&parent->depend_lock);
+
   if (parent->depend_hash == NULL)
       parent->depend_hash = htab_create (2 * ndepend > 12 ? 2 * ndepend : 12);
   for (i = 0; i < ndepend; i++)
@@ -459,34 +460,14 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       /* tasks, children with dependencies are considered after their
 	 dependencies are met. */
 
-#if _LIBGOMP_CHECKING_
-      if (__atomic_load_n (&parent->state,
-			   MEMMODEL_ACQUIRE) == GOMP_STATE_DONE)
-	gomp_fatal ("GOMP_task: state of parent task is GOMP_STATE_DONE");
-#endif
-
-      if (__atomic_load_n (&parent->state,
-			   MEMMODEL_ACQUIRE) == GOMP_STATE_WOKEN)
-	{
-	  __atomic_store_n (&parent->state, GOMP_STATE_DEFAULT,
-			    MEMMODEL_RELEASE);
-	}
-
-      gomp_mutex_lock (&team->task_lock);
       __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
       __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
-      priority_queue_insert (&team->task_queue, task, priority,
-			     PRIORITY_INSERT_END,
-			     /*adjust_parent_depends_on=*/false,
-			     task->parent_depends_on);
-      __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_SEQ_CST);
-      gomp_mutex_unlock (&team->task_lock);
+      gomp_enqueue_task (task, team, task->priority);
 
-
-      printf("input: %d\n", (int)__atomic_load_n (&parent->num_children, MEMMODEL_ACQUIRE));
-
-
+      gomp_mutex_lock (&team->barrier_lock);
       gomp_team_barrier_set_task_pending (&team->barrier);
+      gomp_mutex_unlock (&team->barrier_lock);
+
       do_wake = __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
 	        + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
 	        < team->nthreads;
@@ -526,16 +507,8 @@ gomp_target_task_completion (struct gomp_team *team, struct gomp_task *task)
   struct gomp_task *parent = task->parent;
   struct gomp_taskgroup *taskgroup = task->taskgroup;
 
-  //__atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
-  //__atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
   __atomic_store_n (&task->kind, GOMP_TASK_WAITING, MEMMODEL_RELEASE);
-  
-  gomp_mutex_lock (&team->task_lock);
-  priority_queue_insert (&team->task_queue, task, task->priority,
-			 PRIORITY_INSERT_BEGIN, false,
-			 task->parent_depends_on);
-  __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_SEQ_CST);
-  gomp_mutex_unlock (&team->task_lock);
+  gomp_enqueue_task (task, team, task->priority);
 
   if (parent && __atomic_load_n (&parent->taskwait, MEMMODEL_ACQUIRE))
     {
@@ -562,14 +535,18 @@ gomp_target_task_completion (struct gomp_team *team, struct gomp_task *task)
 	   Inform any waiters.  */
 	gomp_sem_post (&taskgroup->taskgroup_sem);
     }
+  gomp_mutex_lock (&team->barrier_lock);
   gomp_team_barrier_set_task_pending (&team->barrier);
+  gomp_mutex_unlock (&team->barrier_lock);
   /* I'm afraid this can't be done after releasing team->task_lock,
      as gomp_target_task_completion is run from unrelated thread and
      therefore in between gomp_mutex_unlock and gomp_team_barrier_wake
      the team could be gone already.  */
   if (team->nthreads
       > __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE))
-    gomp_team_barrier_wake (&team->barrier, 1);
+    {
+      gomp_team_barrier_wake (&team->barrier, 1);
+    }
 }
 
 /* Signal that a target task TTASK has completed the asynchronously
@@ -583,16 +560,10 @@ GOMP_PLUGIN_target_task_completion (void *data)
   struct gomp_task *task = ttask->task;
   struct gomp_team *team = ttask->team;
 
-  //gomp_mutex_lock (&team->task_lock);
-  if (ttask->state == GOMP_TARGET_TASK_READY_TO_RUN)
-    {
-      ttask->state = GOMP_TARGET_TASK_FINISHED;
-      //gomp_mutex_unlock (&team->task_lock);
-      return;
-    }
-  ttask->state = GOMP_TARGET_TASK_FINISHED;
+  if (__atomic_exchange_n (&ttask->state, GOMP_TARGET_TASK_FINISHED,
+			   MEMMODEL_ACQ_REL) == GOMP_TARGET_TASK_READY_TO_RUN)
+    return;
   gomp_target_task_completion (team, task);
-  //gomp_mutex_unlock (&team->task_lock);
 }
 
 static void gomp_task_run_post_handle_depend_hash (struct gomp_task *);
@@ -747,22 +718,8 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
       return false;
     }
 
-#if _LIBGOMP_CHECKING_
-  if (__atomic_load_n (&parent->state, MEMMODEL_ACQUIRE) == GOMP_STATE_DONE)
-    gomp_fatal ("gomp_create_target_task: state of parent is GOMP_STATE_DONE");
-#endif
-
-  if (__atomic_load_n (&parent->state, MEMMODEL_ACQUIRE) == GOMP_STATE_WOKEN)
-    {
-      __atomic_store_n (&parent->state, GOMP_STATE_DEFAULT, MEMMODEL_RELEASE);
-    }
-
-  gomp_mutex_lock (&team->task_lock);
-  __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
-  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
   if (taskgroup)
     __atomic_add_fetch (&taskgroup->num_children, 1, MEMMODEL_SEQ_CST);
-
 
   /* For async offloading, if we don't need to wait for dependencies,
      run the gomp_target_task_fn right away, essentially schedule the
@@ -771,35 +728,42 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
       && (devicep->capabilities & GOMP_OFFLOAD_CAP_OPENMP_400))
     {
       __atomic_store_n (&task->kind, GOMP_TASK_TIED, MEMMODEL_RELEASE);
+      __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
+      __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
 
-      gomp_mutex_unlock (&team->task_lock);
       thr->task = task;
       gomp_target_task_fn (task->fn_data);
       thr->task = parent;
 
       __atomic_store_n (&task->kind, GOMP_TASK_ASYNC_RUNNING,
 			MEMMODEL_RELEASE);
-      /* If GOMP_PLUGIN_target_task_completion has run already
-	 in between gomp_target_task_fn and the mutex lock,
-	 perform the requeuing here.  */
-      if (ttask->state == GOMP_TARGET_TASK_FINISHED)
-	gomp_target_task_completion (team, task);
-      else
-	ttask->state = GOMP_TARGET_TASK_RUNNING;
-      //gomp_mutex_unlock (&team->task_lock);
+
+      /* If GOMP_PLUGIN_target_task_completion has run already, perform the 
+	 requeuing here.  */
+      if (__atomic_load_n (&ttask->state, MEMMODEL_ACQUIRE)
+	  == GOMP_TARGET_TASK_FINISHED)
+	{
+	  gomp_target_task_completion (team, task);
+	}
+      else if (__atomic_exchange_n (&ttask->state, GOMP_TARGET_TASK_RUNNING,
+				    MEMMODEL_ACQ_REL)
+	       == GOMP_TARGET_TASK_FINISHED)
+	{
+	  gomp_target_task_completion (team, task);
+	}
       return true;
     }
 
-  priority_queue_insert (&team->task_queue, task, 0, PRIORITY_INSERT_END,
-			 /*adjust_parent_depends_on=*/false,
-			 task->parent_depends_on);
-  __atomic_add_fetch(&team->task_queued_count, 1, MEMMODEL_SEQ_CST);
-  gomp_mutex_unlock (&team->task_lock);
+  __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
+  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
+  gomp_enqueue_task (task, team, task->priority);
 
+  gomp_mutex_lock (&team->barrier_lock);
   gomp_team_barrier_set_task_pending (&team->barrier);
-  do_wake = __atomic_load_n(&team->task_running_count, MEMMODEL_ACQUIRE)
-            + !__atomic_load_n(&parent->in_tied_task, MEMMODEL_ACQUIRE)
-            < team->nthreads;
+  gomp_mutex_unlock (&team->barrier_lock);
+  do_wake = __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
+	      + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
+	    < team->nthreads;
   if (do_wake)
     gomp_team_barrier_wake (&team->barrier, 1);
   return true;
@@ -808,18 +772,9 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
 static inline bool
 gomp_task_run_pre (struct gomp_task *task, struct gomp_team *team)
 {
-#if _LIBGOMP_CHECKING_
-  priority_queue_verify (&team->task_queue, false);
-#endif
   struct gomp_taskgroup *taskgroup = task->taskgroup;
 
-  priority_queue_remove (&team->task_queue, task, MEMMODEL_RELAXED);
-  task->pnode.next = NULL;
-  task->pnode.prev = NULL;
   __atomic_store_n (&task->kind, GOMP_TASK_TIED, MEMMODEL_RELEASE);
-
-  if (__atomic_sub_fetch (&team->task_queued_count, 1, MEMMODEL_SEQ_CST) == 0)
-    gomp_team_barrier_clear_task_pending (&team->barrier);
   if (__builtin_expect (gomp_cancel_var, 0) && !task->copy_ctors_done)
     {
       if (gomp_team_barrier_cancelled (&team->barrier))
@@ -844,7 +799,6 @@ gomp_task_run_post_handle_depend_hash (struct gomp_task *child_task)
   struct gomp_task *parent = child_task->parent;
   size_t i;
 
-  gomp_mutex_lock (&parent->depend_lock);
   for (i = 0; i < child_task->depend_count; i++)
     {
       if (!child_task->depend[i].redundant)
@@ -867,7 +821,6 @@ gomp_task_run_post_handle_depend_hash (struct gomp_task *child_task)
 	    }
 	}
     }
-  gomp_mutex_unlock (&parent->depend_lock);
 }
 
 /* After a CHILD_TASK has been run, adjust the dependency queue for
@@ -887,44 +840,19 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
   for (i = 0; i < count; i++)
     {
       struct gomp_task *task = child_task->dependers->elem[i];
+
       /* CHILD_TASK satisfies a dependency for TASK.  Keep track of
 	 TASK's remaining dependencies.  Once TASK has no other
 	 depenencies, put it into the various queues so it will get
 	 scheduled for execution.  */
       if (__atomic_sub_fetch (&task->num_dependees, 1, MEMMODEL_SEQ_CST) != 0)
 	continue;
-
       __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
-
-      gomp_mutex_lock (&team->task_lock);
-      priority_queue_insert (&team->task_queue, task, task->priority,
-			     PRIORITY_INSERT_END,
-			     /*adjust_parent_depends_on=*/false,
-			     task->parent_depends_on);
-      __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_SEQ_CST);
-      gomp_mutex_unlock (&team->task_lock);
 
       struct gomp_taskgroup *taskgroup = task->taskgroup;
       if (parent)
 	{
-	  __atomic_add_fetch (&parent->num_children, 1,
-			      MEMMODEL_SEQ_CST);
-
-#if _LIBGOMP_CHECKING_
-	  if (__atomic_load_n (&parent->state, MEMMODEL_ACQUIRE)
-	      == GOMP_STATE_DONE)
-	    gomp_fatal (
-	      "gomp_task_run_post_handle_dependers: state of parent is "
-	      "GOMP_STATE_DONE");
-#endif
-
-	  if (__atomic_load_n (&parent->state,
-			       MEMMODEL_ACQUIRE) == GOMP_STATE_WOKEN)
-	    {
-	      __atomic_store_n (&parent->state, GOMP_STATE_DEFAULT,
-				MEMMODEL_RELEASE);
-	    }
-
+	  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
 	  if (__atomic_load_n (&parent->taskwait, MEMMODEL_ACQUIRE))
 	    {
 	      if (__atomic_exchange_n (&parent->taskwait->in_taskwait, false,
@@ -954,6 +882,7 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
 	    }
 	}
 
+      gomp_enqueue_task (task, team, task->priority);
       ++ret;
     }
   free (child_task->dependers);
@@ -967,18 +896,18 @@ static inline size_t
 gomp_task_run_post_handle_depend (struct gomp_task *child_task,
 				  struct gomp_team *team)
 {
+  size_t new_tasks = 0;
+  struct gomp_task *parent = child_task->parent;
+
   if (child_task->depend_count == 0)
     return 0;
 
-  /* If parent is gone already, the hash table is freed and nothing
-     will use the hash table anymore, no need to remove anything from it.  */
-  if (child_task->parent != NULL)
-    gomp_task_run_post_handle_depend_hash (child_task);
-
-  if (child_task->dependers == NULL)
-    return 0;
-
-  return gomp_task_run_post_handle_dependers (child_task, team);
+  gomp_mutex_lock (&parent->depend_lock);
+  gomp_task_run_post_handle_depend_hash (child_task);
+  if (child_task->dependers != NULL)
+      new_tasks = gomp_task_run_post_handle_dependers (child_task, team);
+  gomp_mutex_unlock (&parent->depend_lock);
+  return new_tasks;
 }
 
 /* Remove CHILD_TASK from its parent.  */
@@ -986,28 +915,34 @@ gomp_task_run_post_handle_depend (struct gomp_task *child_task,
 static inline void
 gomp_task_run_post_remove_parent (struct gomp_task *child_task)
 {
-  struct gomp_task *parent = __atomic_load_n (&child_task->parent,
-					      MEMMODEL_ACQUIRE);
-
+  struct gomp_task *parent = child_task->parent;
   if (parent == NULL)
     return;
-
-#if _LIBGOMP_CHECKING_
-  if (__atomic_load_n (&parent->num_children, MEMMODEL_ACQUIRE) < 1)
-    gomp_fatal ("gomp_task_run_post_remove_parent: num_children < 1");
-#endif
 
   /* If this was the last task the parent was depending on,
      synchronize with gomp_task_maybe_wait_for_dependencies so it can
      clean up and return.  */
   if (__builtin_expect (child_task->parent_depends_on, 0)
-      && __atomic_sub_fetch (&parent->taskwait->n_depend, 1,
-			     MEMMODEL_SEQ_CST) == 0
+      && __atomic_sub_fetch (&parent->taskwait->n_depend, 1, MEMMODEL_SEQ_CST)
+	   == 0
       && __atomic_exchange_n (&parent->taskwait->in_depend_wait, false,
 			      MEMMODEL_SEQ_CST))
     {
       gomp_sem_post (&parent->taskwait->taskwait_sem);
     }
+
+  /* Mark that this parent is depended on by some children before entering 
+     the critical section. as soon as num_children become 0, we enter 
+     a critical section with the parent's executing thread. */
+
+  enum gomp_task_state non_trivial_state = GOMP_STATE_FREE;
+  __atomic_compare_exchange_n (&parent->state, &non_trivial_state,
+			       GOMP_STATE_ALIVE, false, MEMMODEL_ACQ_REL,
+			       MEMMODEL_ACQUIRE);
+
+  /* Enter critical section. If the main thread didn't free the parent,
+     the parent's state will be in GOMP_DONE. In that case we are responsible 
+     for freeing the parent */
 
   if (__atomic_sub_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST) == 0)
     {
@@ -1018,12 +953,12 @@ gomp_task_run_post_remove_parent (struct gomp_task *child_task)
 	  gomp_sem_post (&parent->taskwait->taskwait_sem);
 	}
 
-      if (__atomic_exchange_n (&parent->state, GOMP_STATE_WOKEN,
-			       MEMMODEL_SEQ_CST) == GOMP_STATE_DONE)
+      if (__atomic_exchange_n (&parent->state, GOMP_STATE_FREE,
+			       MEMMODEL_SEQ_CST)
+	  == GOMP_STATE_DONE)
 	{
 	  gomp_finish_task (parent);
 	  free (parent);
-	  parent = NULL;
 	}
     }
 }
@@ -1036,11 +971,6 @@ gomp_task_run_post_remove_taskgroup (struct gomp_task *child_task)
   struct gomp_taskgroup *taskgroup = child_task->taskgroup;
   if (taskgroup == NULL)
     return;
-
-#if _LIBGOMP_CHECKING_
-  if (__atomic_load_n (&taskgroup->num_children, MEMMODEL_ACQUIRE) < 1)
-    gomp_fatal ("gomp_task_run_post_remove_taskgroup: num_children < 1");
-#endif
 
   if (__atomic_sub_fetch (&taskgroup->num_children, 1, MEMMODEL_SEQ_CST) == 0
       && __atomic_exchange_n (&taskgroup->in_taskgroup_wait, false,
@@ -1065,46 +995,13 @@ gomp_execute_task (struct gomp_team *team, struct gomp_thread *thr,
   int do_wake = 0;
   struct gomp_task *next_task = NULL;
 
-  gomp_mutex_lock (&team->task_lock);
-  while (true)
-    {
-      if (priority_queue_empty_p (&team->task_queue, MEMMODEL_ACQUIRE))
-	{
-	  gomp_mutex_unlock (&team->task_lock);
-	  return false;
-	}
+  next_task = gomp_dequeue_task (team);
+  if(next_task == NULL)
+      return false;
 
-      next_task = priority_queue_next_task (&team->task_queue);
-
-      if (__atomic_load_n (&next_task->kind, MEMMODEL_ACQUIRE)
-	  == GOMP_TASK_WAITING)
-	{
-	  cancelled = gomp_task_run_pre (next_task, team);
-	  if (__builtin_expect (cancelled, 0))
-	    {
-	      gomp_mutex_unlock (&team->task_lock);
-	      goto finish_cancelled;
-	    }
-	  break;
-	}
-      else
-	{
-	  /* gomp_mutex_unlock (&team->task_lock); */
-	  /* return false; */
-	    continue;
-	}
-    }
-  gomp_mutex_unlock (&team->task_lock);
-
-  if (next_task->parent)
-    {
-      printf ("Wait: %d %d %d\n",
-	      (int) __atomic_load_n (&next_task->parent->num_children,
-				     MEMMODEL_ACQUIRE),
-	      (int) __atomic_load_n (&team->task_queued_count,
-				     MEMMODEL_ACQUIRE),
-	      (int) __atomic_load_n (&team->task_count, MEMMODEL_ACQUIRE));
-    }
+  cancelled = gomp_task_run_pre (next_task, team);
+  if (__builtin_expect (cancelled, 0))
+      goto finish_cancelled;
 
   thr->task = next_task;
   if (__builtin_expect (next_task->fn == NULL, 0))
@@ -1118,12 +1015,19 @@ gomp_execute_task (struct gomp_team *team, struct gomp_thread *thr,
 	    = (struct gomp_target_task *) next_task->fn_data;
 	  /* If GOMP_PLUGIN_target_task_completion has run already
 	     perform the requeuing here.  */
-	  if (ttask->state == GOMP_TARGET_TASK_FINISHED)
-	    gomp_target_task_completion (team, next_task);
-	  else
-	    ttask->state = GOMP_TARGET_TASK_RUNNING;
-	  next_task = NULL;
-	  return false;
+
+	  if (__atomic_load_n (&ttask->state, MEMMODEL_ACQUIRE)
+	      == GOMP_TARGET_TASK_FINISHED)
+	    {
+	      gomp_target_task_completion (team, task);
+	    }
+	  else if (__atomic_exchange_n (&ttask->state, GOMP_TARGET_TASK_RUNNING,
+					MEMMODEL_ACQ_REL)
+		   == GOMP_TARGET_TASK_FINISHED)
+	    {
+	      gomp_target_task_completion (team, task);
+	    }
+	  return true;
 	}
     }
   else
@@ -1136,15 +1040,17 @@ finish_cancelled:;
   gomp_task_run_post_remove_parent (next_task);
   gomp_task_run_post_remove_taskgroup (next_task);
 
-  if (__atomic_load_n (&next_task->num_children, MEMMODEL_ACQUIRE) == 0)
+  /* If the task didn't have any children, free it right away. If the
+     task's last children finished executing and the taskwait semaphore
+     was posted right after checking the number of children, the state 
+     should have been set as GOMP_STATE_WOKEN. In that case the current 
+     thread is responsible for freeing the task. */
+
+  if (__atomic_load_n (&next_task->num_children, MEMMODEL_ACQUIRE) == 0
+      && __atomic_exchange_n (&next_task->state, GOMP_STATE_DONE,
+			      MEMMODEL_SEQ_CST)
+	   == GOMP_STATE_FREE)
     {
-      goto free_task;
-    }
-  else if (__atomic_exchange_n (&next_task->state, GOMP_STATE_DONE,
-				MEMMODEL_SEQ_CST)
-	   == GOMP_STATE_WOKEN)
-    {
-    free_task:;
       gomp_finish_task (next_task);
       free (next_task);
     }
@@ -1154,7 +1060,8 @@ finish_cancelled:;
   if (new_tasks > 1)
     {
       do_wake = team->nthreads
-		- __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
+		- __atomic_load_n (&team->task_running_count,
+				   MEMMODEL_ACQUIRE)
 		- !__atomic_load_n (&task->in_tied_task, MEMMODEL_ACQUIRE);
       if (do_wake > new_tasks)
 	do_wake = new_tasks;
@@ -1171,99 +1078,94 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
   struct gomp_thread *thr = gomp_thread ();
   struct gomp_team *team = thr->ts.team;
   struct gomp_task *task = thr->task;
-  struct gomp_task *child_task = NULL;
+  struct gomp_task *next_task = NULL;
   int do_wake = 0;
 
+  gomp_mutex_lock (&team->barrier_lock);
   if (gomp_barrier_last_thread (state))
     {
       if (__atomic_load_n (&team->task_count, MEMMODEL_ACQUIRE) == 0)
 	{
-	  gomp_mutex_lock (&team->task_lock);
 	  gomp_team_barrier_done (&team->barrier, state);
-	  gomp_mutex_unlock (&team->task_lock);
+	  gomp_mutex_unlock (&team->barrier_lock);
 	  gomp_team_barrier_wake (&team->barrier, 0);
 	  return;
 	}
       gomp_team_barrier_set_waiting_for_tasks (&team->barrier);
     }
+  gomp_mutex_unlock (&team->barrier_lock);
 
   while (true)
     {
       bool cancelled = false;
+      next_task = gomp_dequeue_task (team);
+      if (next_task == NULL)
+	return;
 
-      gomp_mutex_lock (&team->task_lock);
-      if (priority_queue_empty_p (&team->task_queue, MEMMODEL_ACQUIRE))
-	{
-	  gomp_mutex_unlock (&team->task_lock);
-	  return;
-	}
-
-      child_task = priority_queue_next_task (&team->task_queue);
-      cancelled = gomp_task_run_pre (child_task, team);
+      cancelled = gomp_task_run_pre (next_task, team);
       if (__builtin_expect (cancelled, 0))
 	{
-	  gomp_mutex_unlock (&team->task_lock);
 	  goto finish_cancelled;
 	}
+
       __atomic_add_fetch (&team->task_running_count, 1, MEMMODEL_SEQ_CST);
-      __atomic_store_n (&child_task->in_tied_task, true, MEMMODEL_RELEASE);
-      gomp_mutex_unlock (&team->task_lock);
+      __atomic_store_n (&next_task->in_tied_task, true, MEMMODEL_RELEASE);
 
-      if (child_task->parent)
+      thr->task = next_task;
+      if (__builtin_expect (next_task->fn == NULL, 0))
 	{
-	  printf ("Barrier: %d %d %d\n",
-		  (int) __atomic_load_n (&child_task->parent->num_children,
-					 MEMMODEL_ACQUIRE),
-		  (int) __atomic_load_n (&team->task_queued_count,
-					 MEMMODEL_ACQUIRE),
-		  (int) __atomic_load_n (&team->task_count, MEMMODEL_ACQUIRE));
-	}
-
-      thr->task = child_task;
-      if (__builtin_expect (child_task->fn == NULL, 0))
-	{
-	  if (gomp_target_task_fn (child_task->fn_data))
+	  if (gomp_target_task_fn (next_task->fn_data))
 	    {
 	      thr->task = task;
-	      __atomic_store_n (&child_task->kind, GOMP_TASK_ASYNC_RUNNING,
+	      __atomic_store_n (&next_task->kind, GOMP_TASK_ASYNC_RUNNING,
 				MEMMODEL_RELEASE);
 	      __atomic_sub_fetch (&team->task_running_count, 1,
 				  MEMMODEL_SEQ_CST);
 	      struct gomp_target_task *ttask
-		= (struct gomp_target_task *) child_task->fn_data;
+		= (struct gomp_target_task *) next_task->fn_data;
 	      /* If GOMP_PLUGIN_target_task_completion has run already
 		 in between gomp_target_task_fn and the mutex lock,
 		 perform the requeuing here.  */
-	      if (ttask->state == GOMP_TARGET_TASK_FINISHED)
-		gomp_target_task_completion (team, child_task);
-	      else
-		ttask->state = GOMP_TARGET_TASK_RUNNING;
-	      child_task = NULL;
+
+	      if (__atomic_load_n (&ttask->state, MEMMODEL_ACQUIRE)
+		  == GOMP_TARGET_TASK_FINISHED)
+		{
+		  gomp_target_task_completion (team, task);
+		}
+	      else if (__atomic_exchange_n (&ttask->state,
+					    GOMP_TARGET_TASK_RUNNING,
+					    MEMMODEL_ACQ_REL)
+		       == GOMP_TARGET_TASK_FINISHED)
+		{
+		  gomp_target_task_completion (team, task);
+		}
 	      continue;
 	    }
 	}
       else
-	child_task->fn (child_task->fn_data);
+	next_task->fn (next_task->fn_data);
       thr->task = task;
 
     finish_cancelled:;
-      size_t new_tasks = gomp_task_run_post_handle_depend (child_task, team);
-      gomp_task_run_post_remove_parent (child_task);
-      gomp_task_run_post_remove_taskgroup (child_task);
+      size_t new_tasks = gomp_task_run_post_handle_depend (next_task, team);
+      gomp_task_run_post_remove_parent (next_task);
+      gomp_task_run_post_remove_taskgroup (next_task);
 
-      if (__atomic_load_n (&child_task->num_children, MEMMODEL_ACQUIRE) == 0)
+      /* If the task didn't have any children, free it right away. If the
+	 task's last children finished executing and the taskwait semaphore
+	 was posted right after checking the number of children, the state 
+	 should have been set as GOMP_STATE_WOKEN. In that case the current 
+	 thread is responsible for freeing the task. */
+
+      if (__atomic_load_n (&next_task->num_children, MEMMODEL_ACQUIRE) == 0
+	  && __atomic_exchange_n (&next_task->state, GOMP_STATE_DONE,
+				  MEMMODEL_SEQ_CST)
+	       == GOMP_STATE_FREE)
 	{
-	  goto free_task;
+	  gomp_finish_task (next_task);
+	  free (next_task);
 	}
-      else if (__atomic_exchange_n (&child_task->state, GOMP_STATE_DONE,
-				    MEMMODEL_SEQ_CST)
-	       == GOMP_STATE_WOKEN)
-	{
-	free_task:;
-	  gomp_finish_task (child_task);
-	  free (child_task);
-	}
-      child_task = NULL;
+      next_task = NULL;
 
       if (!cancelled)
 	__atomic_sub_fetch (&team->task_running_count, 1, MEMMODEL_SEQ_CST);
@@ -1283,14 +1185,15 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	    }
 	}
 
+      gomp_mutex_lock (&team->barrier_lock);
       if (__atomic_sub_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST) == 0
 	  && gomp_team_barrier_waiting_for_tasks (&team->barrier))
 	{
-	  gomp_mutex_lock (&team->task_lock);
 	  gomp_team_barrier_done (&team->barrier, state);
-	  gomp_mutex_unlock (&team->task_lock);
+	  gomp_mutex_unlock (&team->barrier_lock);
 	  gomp_team_barrier_wake (&team->barrier, 0);
 	}
+      gomp_mutex_unlock (&team->barrier_lock);
     }
 }
 
@@ -1321,13 +1224,13 @@ GOMP_taskwait (void)
     {
       if (!gomp_execute_task (team, thr, task))
 	{
-	  /* if (__atomic_load_n (&task->taskwait, MEMMODEL_CONSUME)) */
+	  /* if (__atomic_load_n (&task->taskwait, MEMMODEL_ACQUIRE) == NULL) */
 	  /*   { */
 	  /*     taskwait.in_depend_wait = false; */
-	  /*     taskwait.in_taskwait = true; */
 	  /*     gomp_sem_init (&taskwait.taskwait_sem, 0); */
 	  /*     __atomic_store_n (&task->taskwait, &taskwait, MEMMODEL_RELEASE); */
 	  /*   } */
+	  /* __atomic_store_n (&taskwait.in_taskwait, true, MEMMODEL_RELEASE); */
 
 	  /* /\* The last children could have finished running at this point. */
 	  /*    Not checking this case will result in a rare deadlock. *\/ */
@@ -1337,8 +1240,8 @@ GOMP_taskwait (void)
 	  /* 			MEMMODEL_RELEASE); */
 	  /*     break; */
 	  /*   } */
-	  
 	  /* gomp_sem_wait (&taskwait.taskwait_sem); */
+	  /* printf("Exited %d\n", (int)__atomic_load_n (&task->num_children, MEMMODEL_ACQUIRE)); */
 	}
     }
   bool destroy_taskwait
@@ -1448,9 +1351,6 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
 	      {
 		tsk->parent_depends_on = true;
 		++num_awaited;
-		/* Previously, the dependencies were upgraded their priorities.
-		   Not sure if not upgrading the depedencies will not lead
-		   to a possible deadlock in a single queue situation. */
 	      }
 	  }
     }
@@ -1464,24 +1364,16 @@ gomp_task_maybe_wait_for_dependencies (void **depend)
   taskwait.n_depend = num_awaited;
   __atomic_store_n (&task->taskwait, &taskwait, MEMMODEL_RELEASE);
 
-  while (true)
+  while (__atomic_load_n (&taskwait.n_depend, MEMMODEL_ACQUIRE) != 0)
     {
-      if (gomp_execute_task (team, thr, task))
-	{
-	  if (__atomic_sub_fetch (&taskwait.n_depend, 1,
-				  MEMMODEL_SEQ_CST) == 0)
-	    break;
-	}
-      else
+      if (!gomp_execute_task (team, thr, task))
 	{
 	  __atomic_store_n (&taskwait.in_depend_wait, true, MEMMODEL_RELEASE);
-
 	  if (__atomic_load_n (&taskwait.n_depend, MEMMODEL_ACQUIRE) == 0)
 	    {
 	      taskwait.in_depend_wait = false;
 	      break;
 	    }
-
 	  gomp_sem_wait (&taskwait.taskwait_sem);
 	}
     }
@@ -1563,23 +1455,17 @@ GOMP_taskgroup_end (void)
     {
       if (!gomp_execute_task (team, thr, task))
 	{
-	  if (__atomic_load_n (&team->task_queued_count,
-			       MEMMODEL_ACQUIRE) == 0)
+	  __atomic_store_n (&taskgroup->in_taskgroup_wait, true,
+			    MEMMODEL_RELEASE);
+	  if (__atomic_load_n (&taskgroup->num_children, MEMMODEL_ACQUIRE)
+	      == 0)
 	    {
-	      __atomic_store_n (&taskgroup->in_taskgroup_wait, true,
-				MEMMODEL_RELEASE);
-	      if (__atomic_load_n (&taskgroup->num_children,
-				   MEMMODEL_RELAXED) == 0)
-		{
-		  taskgroup->in_taskgroup_wait = false;
-		  goto finish;
-		}
-	      gomp_sem_wait (&taskgroup->taskgroup_sem);
+	      taskgroup->in_taskgroup_wait = false;
+	      goto finish;
 	    }
-	  //gomp_mutex_lock (&team->task_lock);
+	  gomp_sem_wait (&taskgroup->taskgroup_sem);
 	}
     }
-  //gomp_mutex_unlock (&team->task_lock);
 
  finish:;
   task->taskgroup = taskgroup->prev;

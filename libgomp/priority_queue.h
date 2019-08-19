@@ -215,36 +215,15 @@ priority_list_insert (struct priority_list *list,
 		      struct gomp_task *task,
 		      int priority,
 		      enum priority_insert_type pos,
-		      bool adjust_parent_depends_on,
 		      bool task_is_parent_depends_on)
 {
   struct priority_node *node = task_to_priority_node (task);
   if (list->tasks)
     {
-      /* If we are keeping track of higher/lower priority items,
-	 but this is a lower priority WAITING task
-	 (parent_depends_on != NULL), put it after all ready to
-	 run tasks.  See the comment in
-	 priority_queue_upgrade_task for a visual on how tasks
-	 should be organized.  */
-      if (adjust_parent_depends_on
-	  && pos == PRIORITY_INSERT_BEGIN
-	  && list->last_parent_depends_on
-	  && !task_is_parent_depends_on)
-	{
-	  struct priority_node *last_parent_depends_on
-	    = list->last_parent_depends_on;
-	  node->next = last_parent_depends_on->next;
-	  node->prev = last_parent_depends_on;
-	}
-      /* Otherwise, put it at the top/bottom of the queue.  */
-      else
-	{
-	  node->next = list->tasks;
-	  node->prev = list->tasks->prev;
-	  if (pos == PRIORITY_INSERT_BEGIN)
-	    list->tasks = node;
-	}
+      node->next = list->tasks;
+      node->prev = list->tasks->prev;
+      if (pos == PRIORITY_INSERT_BEGIN)
+	list->tasks = node;
       node->next->prev = node;
       node->prev->next = node;
     }
@@ -254,10 +233,6 @@ priority_list_insert (struct priority_list *list,
       node->prev = node;
       list->tasks = node;
     }
-  if (adjust_parent_depends_on
-      && list->last_parent_depends_on == NULL
-      && task_is_parent_depends_on)
-    list->last_parent_depends_on = node;
 }
 
 /* Tree version of priority_list_insert.  */
@@ -267,7 +242,6 @@ priority_tree_insert (struct priority_queue *head,
 		      struct gomp_task *task,
 		      int priority,
 		      enum priority_insert_type pos,
-		      bool adjust_parent_depends_on,
 		      bool task_is_parent_depends_on)
 {
   if (__builtin_expect (head->t.root == NULL, 0))
@@ -300,7 +274,6 @@ priority_tree_insert (struct priority_queue *head,
       list = &k->key.l;
     }
   priority_list_insert (list, task, priority, pos,
-			adjust_parent_depends_on,
 			task_is_parent_depends_on);
 }
 
@@ -311,7 +284,6 @@ priority_queue_insert (struct priority_queue *head,
 		       struct gomp_task *task,
 		       int priority,
 		       enum priority_insert_type pos,
-		       bool adjust_parent_depends_on,
 		       bool task_is_parent_depends_on)
 {
 #if _LIBGOMP_CHECKING_
@@ -320,11 +292,9 @@ priority_queue_insert (struct priority_queue *head,
 #endif
   if (priority_queue_multi_p (head) || __builtin_expect (priority > 0, 0))
     priority_tree_insert (head, task, priority, pos,
-			  adjust_parent_depends_on,
 			  task_is_parent_depends_on);
   else
     priority_list_insert (&head->l, task, priority, pos,
-			  adjust_parent_depends_on,
 			  task_is_parent_depends_on);
 }
 

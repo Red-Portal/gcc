@@ -313,19 +313,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    }
 	}
 
-#if _LIBGOMP_CHECKING_
-      if (__atomic_load_n (&parent->state,
-			   MEMMODEL_ACQUIRE) == GOMP_STATE_DONE)
-	gomp_fatal ("GOMP_taskloop: state of parent task is GOMP_STATE_DONE");
-#endif
-
-      if (__atomic_load_n (&parent->state,
-			   MEMMODEL_ACQUIRE) == GOMP_STATE_WOKEN)
-	{
-	  __atomic_store_n (&parent->state, GOMP_STATE_DEFAULT,
-			    MEMMODEL_RELEASE);
-	}
-
       if (taskgroup)
 	__atomic_add_fetch (&taskgroup->num_children, num_tasks,
 			    MEMMODEL_ACQ_REL);
@@ -335,16 +322,14 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 
       for (i = 0; i < num_tasks; i++)
 	{
-	  gomp_mutex_lock (&team->task_lock);
 	  struct gomp_task *task = tasks[i];
-	  priority_queue_insert (&team->task_queue, task, priority,
-				 PRIORITY_INSERT_END,
-				 /*last_parent_depends_on=*/false,
-				 task->parent_depends_on);
-	  __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
-	  gomp_mutex_unlock (&team->task_lock);
+	  gomp_enqueue_task (task, team, task->priority);
 	}
+
+      gomp_mutex_lock (&team->task_lock);
       gomp_team_barrier_set_task_pending (&team->barrier);
+      gomp_mutex_unlock (&team->task_lock);
+
       if (__atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
 	    + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
 	  < team->nthreads)
