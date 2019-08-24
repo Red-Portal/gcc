@@ -240,6 +240,10 @@ package body Sem_Ch12 is
    --  circularity is detected, and used to abandon compilation after the
    --  messages have been posted.
 
+   Circularity_Detected : Boolean := False;
+   --  It should really be reset upon encountering a new main unit, but in
+   --  practice we do not use multiple main units so this is not critical.
+
    -----------------------------------------
    -- Implementation of Generic Contracts --
    -----------------------------------------
@@ -352,10 +356,6 @@ package body Sem_Ch12 is
 
    --    Instantiate_Subprogram_Contract
 
-   Circularity_Detected : Boolean := False;
-   --  This should really be reset on encountering a new main unit, but in
-   --  practice we are not using multiple main units so it is not critical.
-
    --------------------------------------------------
    -- Formal packages and partial parameterization --
    --------------------------------------------------
@@ -380,23 +380,23 @@ package body Sem_Ch12 is
    --  the generic package, and a set of declarations that map the actuals
    --  into local renamings, just as we do for bona fide instantiations. For
    --  defaulted parameters and formals with a box, we copy directly the
-   --  declarations of the formal into this local package. The result is a
-   --  a package whose visible declarations may include generic formals. This
+   --  declarations of the formals into this local package. The result is a
+   --  package whose visible declarations may include generic formals. This
    --  package is only used for type checking and visibility analysis, and
-   --  never reaches the back-end, so it can freely violate the placement
+   --  never reaches the back end, so it can freely violate the placement
    --  rules for generic formal declarations.
 
    --  The list of declarations (renamings and copies of formals) is built
    --  by Analyze_Associations, just as for regular instantiations.
 
    --  At the point of instantiation, conformance checking must be applied only
-   --  to those parameters that were specified in the formal. We perform this
+   --  to those parameters that were specified in the formals. We perform this
    --  checking by creating another internal instantiation, this one including
    --  only the renamings and the formals (the rest of the package spec is not
    --  relevant to conformance checking). We can then traverse two lists: the
    --  list of actuals in the instance that corresponds to the formal package,
    --  and the list of actuals produced for this bogus instantiation. We apply
-   --  the conformance rules to those actuals that are not defaulted (i.e.
+   --  the conformance rules to those actuals that are not defaulted, i.e.
    --  which still appear as generic formals.
 
    --  When we compile an instance body we must make the right parameters
@@ -3849,12 +3849,17 @@ package body Sem_Ch12 is
       --  Only relevant when back-end inlining is not enabled.
 
       function Might_Inline_Subp (Gen_Unit : Entity_Id) return Boolean;
-      --  If inlining is active and the generic contains inlined subprograms,
-      --  we either instantiate the body when front-end inlining is enabled,
-      --  or we add a pending instantiation when back-end inlining is enabled.
-      --  In the former case, this may cause superfluous instantiations, but
-      --  in either case we need to perform the instantiation of the body in
-      --  the context of the instance and not in that of the point of inlining.
+      --  Return True if inlining is active and Gen_Unit contains inlined
+      --  subprograms. In this case, we may either instantiate the body when
+      --  front-end inlining is enabled, or add a pending instantiation when
+      --  back-end inlining is enabled. In the former case, this may cause
+      --  superfluous instantiations, but in either case we need to perform
+      --  the instantiation of the body in the context of the instance and
+      --  not in that of the point of inlining.
+
+      function Needs_Body_Instantiated (Gen_Unit : Entity_Id) return Boolean;
+      --  Return True if Gen_Unit needs to have its body instantiated in the
+      --  context of N. This in particular excludes generic contexts.
 
       -----------------------
       -- Might_Inline_Subp --
@@ -3891,6 +3896,48 @@ package body Sem_Ch12 is
 
          return False;
       end Might_Inline_Subp;
+
+      -------------------------------
+      --  Needs_Body_Instantiated  --
+      -------------------------------
+
+      function Needs_Body_Instantiated (Gen_Unit : Entity_Id) return Boolean is
+      begin
+         --  No need to instantiate bodies in generic units
+
+         if Is_Generic_Unit (Cunit_Entity (Main_Unit)) then
+            return False;
+         end if;
+
+         --  If the instantiation is in the main unit, then the body is needed
+
+         if Is_In_Main_Unit (N) then
+            return True;
+         end if;
+
+         --  If not, then again no need to instantiate bodies in generic units
+
+         if Is_Generic_Unit (Cunit_Entity (Get_Code_Unit (N))) then
+            return False;
+         end if;
+
+         --  Here we have a special handling for back-end inlining: if inline
+         --  processing is required, then we unconditionally want to have the
+         --  body instantiated. The reason is that Might_Inline_Subp does not
+         --  catch all the cases (as it does not recurse into nested packages)
+         --  so this avoids the need to patch things up afterwards. Moreover,
+         --  these instantiations are only performed on demand when back-end
+         --  inlining is enabled, so this causes very little extra work.
+
+         if Inline_Processing_Required and then Back_End_Inlining then
+            return True;
+         end if;
+
+         --  We want to have the bodies instantiated in non-main units if
+         --  they might contribute inlined subprograms.
+
+         return Might_Inline_Subp (Gen_Unit);
+      end Needs_Body_Instantiated;
 
       --  Local declarations
 
@@ -4256,9 +4303,7 @@ package body Sem_Ch12 is
          end if;
 
          --  Save the instantiation node for a subsequent instantiation of the
-         --  body if there is one and the main unit is not generic, and either
-         --  we are generating code for this main unit, or the instantiation
-         --  contains inlined subprograms and is not done in a generic unit.
+         --  body if there is one and it needs to be instantiated here.
 
          --  We instantiate the body only if we are generating code, or if we
          --  are generating cross-reference information, or if we are building
@@ -4354,12 +4399,7 @@ package body Sem_Ch12 is
               (Unit_Requires_Body (Gen_Unit)
                 or else Enclosing_Body_Present
                 or else Present (Corresponding_Body (Gen_Decl)))
-               and then not Is_Generic_Unit (Cunit_Entity (Main_Unit))
-               and then (Is_In_Main_Unit (N)
-                          or else (Might_Inline_Subp (Gen_Unit)
-                                    and then
-                                   not Is_Generic_Unit
-                                         (Cunit_Entity (Get_Code_Unit (N)))))
+               and then Needs_Body_Instantiated (Gen_Unit)
                and then not Is_Actual_Pack
                and then not Inline_Now
                and then (Operating_Mode = Generate_Code
@@ -8909,10 +8949,7 @@ package body Sem_Ch12 is
             Decl := Unit_Declaration_Node (Corresponding_Body (Decl));
          end if;
 
-         if Nkind_In (Original_Node (Decl), N_Function_Instantiation,
-                                            N_Package_Instantiation,
-                                            N_Procedure_Instantiation)
-         then
+         if Nkind (Original_Node (Decl)) in N_Generic_Instantiation then
             return Original_Node (Decl);
          else
             return Unit (Parent (Decl));
@@ -13658,15 +13695,26 @@ package body Sem_Ch12 is
               and then
                 Nkind (Original_Node (True_Parent)) = N_Package_Instantiation
             then
-               --  Parent is a compilation unit that is an instantiation.
-               --  Instantiation node has been replaced with package decl.
+               --  Parent is a compilation unit that is an instantiation, and
+               --  instantiation node has been replaced with package decl.
 
                Inst_Node := Original_Node (True_Parent);
                exit;
 
             elsif Nkind (True_Parent) = N_Package_Declaration
-              and then Present (Generic_Parent (Specification (True_Parent)))
+             and then Nkind (Parent (True_Parent)) = N_Compilation_Unit
+             and then
+               Nkind (Unit (Parent (True_Parent))) = N_Package_Instantiation
+            then
+               --  Parent is a compilation unit that is an instantiation, but
+               --  instantiation node has not been replaced with package decl.
+
+               Inst_Node := Unit (Parent (True_Parent));
+               exit;
+
+            elsif Nkind (True_Parent) = N_Package_Declaration
               and then Nkind (Parent (True_Parent)) /= N_Compilation_Unit
+              and then Present (Generic_Parent (Specification (True_Parent)))
             then
                --  Parent is an instantiation within another specification.
                --  Declaration for instance has been inserted before original

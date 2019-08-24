@@ -672,7 +672,7 @@ package body Sem_SPARK is
    --  Main traversal procedure to check safe pointer usage
 
    procedure Check_Old_Loop_Entry (N : Node_Id);
-   --  Check SPARK RM 3.10(14) regarding 'Old and 'Loop_Entry
+   --  Check SPARK RM 3.10(13) regarding 'Old and 'Loop_Entry
 
    procedure Check_Package_Body (Pack : Node_Id);
 
@@ -1085,7 +1085,7 @@ package body Sem_SPARK is
          Borrowed : constant Node_Id := Get_Observed_Or_Borrowed_Expr (Expr);
 
       begin
-         --  SPARK RM 3.10(8): If the type of the target is an anonymous
+         --  SPARK RM 3.10(7): If the type of the target is an anonymous
          --  access-to-variable type (an owning access type), the source shall
          --  be an owning access object [..] whose root object is the target
          --  object itself.
@@ -1100,7 +1100,7 @@ package body Sem_SPARK is
             if Emit_Messages then
                Error_Msg_NE
                  ("source of assignment must have & as root" &
-                    " (SPARK RM 3.10(8)))",
+                    " (SPARK RM 3.10(7)))",
                   Expr, Var);
             end if;
             return;
@@ -1132,7 +1132,7 @@ package body Sem_SPARK is
             if Emit_Messages then
                Error_Msg_NE
                  ("source of assignment must have & as root" &
-                    " (SPARK RM 3.10(8)))",
+                    " (SPARK RM 3.10(7)))",
                   Expr, Var);
             end if;
             return;
@@ -1171,19 +1171,17 @@ package body Sem_SPARK is
 
          Expr_Root := Get_Root_Object (Expr);
 
-         --  SPARK RM 3.10(8): For an assignment statement where
-         --  the target is a stand-alone object of an anonymous
-         --  access-to-object type
+         --  SPARK RM 3.10(7): For an assignment statement where the target is
+         --  a stand-alone object of an anonymous access-to-object type.
 
          pragma Assert (Present (Target_Root));
 
-         --  If the type of the target is an anonymous
-         --  access-to-constant type (an observing access type), the
-         --  source shall be an owning access object denoted by a name
-         --  that is not in the Moved state, and whose root object
-         --  is not in the Moved state and is not declared at a
-         --  statically deeper accessibility level than that of
-         --  the target object.
+         --  If the type of the target is an anonymous access-to-constant type
+         --  (an observing access type), the source shall be an owning access
+         --  object denoted by a name that is not in the Moved state, and whose
+         --  root object is not in the Moved state and is not declared at a
+         --  statically deeper accessibility level than that of the target
+         --  object.
 
          if Is_Access_Constant (Target_Typ) then
             Perm := Get_Perm (Expr);
@@ -1206,11 +1204,10 @@ package body Sem_SPARK is
 
             --  ??? check accessibility level
 
-            --  If the type of the target is an anonymous
-            --  access-to-variable type (an owning access type), the
-            --  source shall be an owning access object denoted by a
-            --  name that is in the Unrestricted state, and whose root
-            --  object is the target object itself.
+            --  If the type of the target is an anonymous access-to-variable
+            --  type (an owning access type), the source shall be an owning
+            --  access object denoted by a name that is in the Unrestricted
+            --  state, and whose root object is the target object itself.
 
             Check_Expression (Expr, Observe);
             Handle_Observe (Target_Root, Expr, Is_Decl);
@@ -2858,7 +2855,7 @@ package body Sem_SPARK is
                         Error_Msg_Name_1 := Aname;
                         Error_Msg_N
                           ("prefix of % attribute must be a function call "
-                           & "(SPARK RM 3.10(14))", Pref);
+                           & "(SPARK RM 3.10(13))", Pref);
                      end if;
 
                   elsif Is_Traversal_Function_Call (Pref) then
@@ -2866,7 +2863,7 @@ package body Sem_SPARK is
                         Error_Msg_Name_1 := Aname;
                         Error_Msg_N
                           ("prefix of % attribute should not call a traversal "
-                           & "function (SPARK RM 3.10(14))", Pref);
+                           & "function (SPARK RM 3.10(13))", Pref);
                      end if;
                   end if;
                end if;
@@ -3095,7 +3092,7 @@ package body Sem_SPARK is
 
          --  Postconditions are checked for correct use of 'Old, but starting
          --  from the corresponding declaration, in order to avoid dealing with
-         --  with contracts on generic subprograms, which are not handled in
+         --  with contracts on generic subprograms which are not handled in
          --  GNATprove.
 
          when Pragma_Precondition
@@ -5008,13 +5005,49 @@ package body Sem_SPARK is
               Get_First_Key (Current_Borrowers);
             Var      : Entity_Id;
             Borrowed : Node_Id;
+            B_Pledge : Entity_Id := Empty;
 
          begin
+            --  Search for a call to a pledge function or a global pragma in
+            --  the parents of Expr.
+
+            declare
+               Call : Node_Id := Expr;
+            begin
+               while Present (Call)
+                 and then
+                   (Nkind (Call) /= N_Function_Call
+                     or else not Is_Pledge_Function (Get_Called_Entity (Call)))
+               loop
+                  --  Do not check for borrowed objects in global contracts
+                  --  ??? However we should keep these objects in the borrowed
+                  --  state when verifying the subprogram so that we can make
+                  --  sure that they are only read inside pledges.
+                  --  ??? There is probably a better way to disable checking of
+                  --  borrows inside global contracts.
+
+                  if Nkind (Call) = N_Pragma
+                    and then Get_Pragma_Id (Pragma_Name (Call)) = Pragma_Global
+                  then
+                     return;
+                  end if;
+
+                  Call := Parent (Call);
+               end loop;
+
+               if Present (Call)
+                 and then Nkind (First_Actual (Call)) in N_Has_Entity
+               then
+                  B_Pledge := Entity (First_Actual (Call));
+               end if;
+            end;
+
             while Key.Present loop
                Var := Key.K;
                Borrowed := Get (Current_Borrowers, Var);
 
                if Is_Prefix_Or_Almost (Pref => Borrowed, Expr => Expr)
+                 and then Var /= B_Pledge
                  and then Emit_Messages
                then
                   Error_Msg_Sloc := Sloc (Borrowed);
@@ -5077,6 +5110,7 @@ package body Sem_SPARK is
       --  in an object.
 
       if not Present (Root)
+        or else not Is_Object (Root)
         or else not Is_Deep (Etype (Root))
       then
          return;

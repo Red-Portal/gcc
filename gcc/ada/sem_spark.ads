@@ -150,6 +150,9 @@ generic
    with function Emit_Messages return Boolean;
    --  Return True when error messages should be emitted.
 
+   with function Is_Pledge_Function (E : Entity_Id) return Boolean;
+   --  Return True if E is annotated with a pledge annotation
+
 package Sem_SPARK is
 
    function Is_Legal (N : Node_Id) return Boolean;
@@ -163,8 +166,7 @@ package Sem_SPARK is
    --  when there are violations of ownership rules.
 
    function Is_Deep (Typ : Entity_Id) return Boolean;
-   --  A function that can tell whether a type is deep. Returns True if the
-   --  type passed as argument is deep.
+   --  Returns True if the type passed as argument is deep
 
    function Is_Traversal_Function (E : Entity_Id) return Boolean;
 

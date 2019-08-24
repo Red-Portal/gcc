@@ -786,9 +786,7 @@ package body Freeze is
          elsif Has_Size_Clause (T) then
             if RM_Size (T) < S then
                Error_Msg_Uint_1 := S;
-               Error_Msg_NE
-                 ("size for& too small, minimum allowed is ^",
-                  Size_Clause (T), T);
+               Error_Msg_NE (Size_Too_Small_Message, Size_Clause (T), T);
             end if;
 
          --  Set size if not set already
@@ -1773,6 +1771,7 @@ package body Freeze is
       New_N :=
         Make_Object_Declaration (Loc,
           Defining_Identifier => Temp,
+          Constant_Present    => True,
           Object_Definition   => New_Occurrence_Of (Typ, Loc),
           Expression          => Relocate_Node (N));
       Insert_Before (Par, New_N);

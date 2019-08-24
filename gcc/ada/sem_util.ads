@@ -42,6 +42,12 @@ package Sem_Util is
    --  including the cases where there can't be any because e.g. the type is
    --  not tagged.
 
+   function Acquire_Warning_Match_String (Str_Lit : Node_Id) return String;
+   --  Used by pragma Warnings (Off, string), and Warn_As_Error (string) to get
+   --  the given string argument, adding leading and trailing asterisks if they
+   --  are not already present.  Str_Lit is the static value of the pragma
+   --  argument.
+
    procedure Add_Access_Type_To_Process (E : Entity_Id; A : Entity_Id);
    --  Add A to the list of access types to process when expanding the
    --  freeze node of E.
@@ -465,16 +471,20 @@ package Sem_Util is
    --  the type itself.
 
    function Compile_Time_Constraint_Error
-     (N    : Node_Id;
-      Msg  : String;
-      Ent  : Entity_Id  := Empty;
-      Loc  : Source_Ptr := No_Location;
-      Warn : Boolean    := False) return Node_Id;
+     (N         : Node_Id;
+      Msg       : String;
+      Ent       : Entity_Id  := Empty;
+      Loc       : Source_Ptr := No_Location;
+      Warn      : Boolean    := False;
+      Extra_Msg : String     := "") return Node_Id;
    --  This is similar to Apply_Compile_Time_Constraint_Error in that it
    --  generates a warning (or error) message in the same manner, but it does
    --  not replace any nodes. For convenience, the function always returns its
    --  first argument. The message is a warning if the message ends with ?, or
    --  we are operating in Ada 83 mode, or the Warn parameter is set to True.
+   --  If Extra_Msg is not a null string, then it's associated with N and
+   --  emitted immediately after the main message (and before output of any
+   --  message indicating that Constraint_Error will be raised).
 
    procedure Conditional_Delay (New_Ent, Old_Ent : Entity_Id);
    --  Sets the Has_Delayed_Freeze flag of New_Ent if the Delayed_Freeze flag

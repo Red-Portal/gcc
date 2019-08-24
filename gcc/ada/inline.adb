@@ -510,7 +510,6 @@ package body Inline is
 
       Inst      : Entity_Id;
       Inst_Decl : Node_Id;
-      Inst_Node : Node_Id;
       Level     : Inline_Level_Type;
 
    --  Start of processing for Add_Inlined_Body
@@ -609,48 +608,23 @@ package body Inline is
                  and then Is_Generic_Instance (Inst)
                  and then not Is_Called (Inst)
                then
-                  --  Do not add a pending instantiation if the body exits
-                  --  already, or if the instance is a compilation unit, or
-                  --  the instance node is missing.
-
                   Inst_Decl := Unit_Declaration_Node (Inst);
+
+                  --  Do not inline the instance if the body already exists,
+                  --  or the instance node is simply missing.
+
                   if Present (Corresponding_Body (Inst_Decl))
-                    or else Nkind (Parent (Inst_Decl)) = N_Compilation_Unit
-                    or else No (Next (Inst_Decl))
+                    or else (Nkind (Parent (Inst_Decl)) /= N_Compilation_Unit
+                              and then No (Next (Inst_Decl)))
                   then
                      Set_Is_Called (Inst);
-
                   else
-                     --  If the inlined call itself appears within an instance,
-                     --  ensure that the enclosing instance body is available.
-                     --  This is necessary because Sem_Ch12.Might_Inline_Subp
-                     --  does not recurse into nested instantiations.
-
-                     if not Is_Inlined (Inst) and then In_Instance then
-                        Set_Is_Inlined (Inst);
-
-                        --  The instantiation node usually follows the package
-                        --  declaration for the instance. If the generic unit
-                        --  has aspect specifications, they are transformed
-                        --  into pragmas in the instance, and the instance node
-                        --  appears after them.
-
-                        Inst_Node := Next (Inst_Decl);
-
-                        while Nkind (Inst_Node) /= N_Package_Instantiation loop
-                           Inst_Node := Next (Inst_Node);
-                        end loop;
-
-                        Add_Pending_Instantiation (Inst_Node, Inst_Decl);
-                     end if;
-
                      Add_Inlined_Instance (Inst);
                   end if;
                end if;
             end if;
 
-            --  If the unit containing E is an instance, then the instance body
-            --  will be analyzed in any case, see Sem_Ch12.Might_Inline_Subp.
+            --  If the unit containing E is an instance, nothing more to do
 
             if Is_Generic_Instance (Pack) then
                null;
@@ -661,8 +635,8 @@ package body Inline is
             --  declares the type, and that body is visible to the back end.
             --  Do not inline it either if it is in the main unit.
             --  Extend the -gnatn2 processing to -gnatn1 for Inline_Always
-            --  calls if the back-end takes care of inlining the call.
-            --  Note that Level is in Inline_Call | Inline_Packag here.
+            --  calls if the back end takes care of inlining the call.
+            --  Note that Level is in Inline_Call | Inline_Package here.
 
             elsif ((Level = Inline_Call
                       and then Has_Pragma_Inline_Always (E)
@@ -822,13 +796,11 @@ package body Inline is
 
          To_Pending_Instantiations.Set (Act_Decl, Index);
 
-         --  If an instantiation is either a compilation unit or is in the main
-         --  unit or subunit or is a nested subprogram, then its body is needed
-         --  as per the analysis already done in Analyze_Package_Instantiation
-         --  and Analyze_Subprogram_Instantiation.
+         --  If an instantiation is in the main unit or subunit, or is a nested
+         --  subprogram, then its body is needed as per the analysis done in
+         --  Analyze_Package_Instantiation & Analyze_Subprogram_Instantiation.
 
-         if Nkind (Parent (Inst)) = N_Compilation_Unit
-           or else In_Main_Unit_Or_Subunit (Act_Decl_Id)
+         if In_Main_Unit_Or_Subunit (Act_Decl_Id)
            or else (Is_Subprogram (Act_Decl_Id)
                      and then Is_Nested (Act_Decl_Id))
          then
@@ -4441,6 +4413,7 @@ package body Inline is
    procedure Initialize is
    begin
       Pending_Instantiations.Init;
+      Called_Pending_Instantiations.Init;
       Inlined_Bodies.Init;
       Successors.Init;
       Inlined.Init;
@@ -4482,6 +4455,13 @@ package body Inline is
          --  of unreachable code.
 
          if No (Info.Inst_Node) then
+            null;
+
+         --  If the instantiation node is a package body, this means that the
+         --  instance is a compilation unit and the instantiation has already
+         --  been performed by Build_Instance_Compilation_Unit_Nodes.
+
+         elsif Nkind (Info.Inst_Node) = N_Package_Body then
             null;
 
          elsif Nkind (Info.Act_Decl) = N_Package_Declaration then
@@ -4759,6 +4739,8 @@ package body Inline is
    begin
       Pending_Instantiations.Release;
       Pending_Instantiations.Locked := True;
+      Called_Pending_Instantiations.Release;
+      Called_Pending_Instantiations.Locked := True;
       Inlined_Bodies.Release;
       Inlined_Bodies.Locked := True;
       Successors.Release;
