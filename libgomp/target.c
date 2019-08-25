@@ -1757,14 +1757,16 @@ GOMP_target_ext (int device, void (*fn) (void *), size_t mapnum,
 	  thr->ts.single_count = 0;
 #endif
 	  thr->ts.static_trip = 0;
-	  thr->task = &team->implicit_task[0];
+
+	  struct gomp_task *implicit_task = gomp_team_implicit_task (team);
+	  thr->task = &implicit_task[0];
 	  gomp_init_task (thr->task, NULL, icv);
 	  if (task)
 	    {
 	      thr->task = task;
 	      gomp_end_task ();
 	      free (task);
-	      thr->task = &team->implicit_task[0];
+	      thr->task = &implicit_task[0];
 	    }
 	  else
 	    pthread_setspecific (gomp_thread_destructor, thr);

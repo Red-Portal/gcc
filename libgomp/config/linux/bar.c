@@ -199,13 +199,13 @@ gomp_team_barrier_wait_cancel (gomp_barrier_t *bar)
 void
 gomp_team_barrier_cancel (struct gomp_team *team)
 {
-  gomp_mutex_lock (&team->task_lock);
+  gomp_mutex_lock (&team->barrier_lock);
   if (team->barrier.generation & BAR_CANCELLED)
     {
-      gomp_mutex_unlock (&team->task_lock);
+      gomp_mutex_unlock (&team->barrier_lock);
       return;
     }
   team->barrier.generation |= BAR_CANCELLED;
-  gomp_mutex_unlock (&team->task_lock);
+  gomp_mutex_unlock (&team->barrier_lock);
   futex_wake ((int *) &team->barrier.generation, INT_MAX);
 }

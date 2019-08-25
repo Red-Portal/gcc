@@ -170,14 +170,14 @@ gomp_new_team (unsigned nthreads)
   if (team == NULL)
     {
       size_t extra = sizeof (team->ordered_release[0])
-		     + sizeof (team->implicit_task[0]);
+		     + sizeof (struct gomp_taskqueue)
+		     + sizeof (team->taskqueues_and_implicit_tasks[0]);
       team = gomp_malloc (sizeof (*team) + nthreads * extra);
 
 #ifndef HAVE_SYNC_BUILTINS
       gomp_mutex_init (&team->work_share_list_free_lock);
 #endif
       gomp_barrier_init (&team->barrier, nthreads);
-      gomp_mutex_init (&team->task_lock);
       gomp_mutex_init (&team->barrier_lock);
 
       team->nthreads = nthreads;
@@ -196,16 +196,23 @@ gomp_new_team (unsigned nthreads)
     team->work_shares[i].next_free = &team->work_shares[i + 1];
   team->work_shares[i].next_free = NULL;
 
-  gomp_sem_init (&team->master_release, 0);
-  team->ordered_release = (void *) &team->implicit_task[nthreads];
-  team->ordered_release[0] = &team->master_release;
-
-  priority_queue_init (&team->task_queue);
+  team->num_taskqueue = nthreads;
+  struct gomp_taskqueue *queues = gomp_team_taskqueue (team);
+  for (i = 0; i < team->num_taskqueue; i++)
+    {
+      priority_queue_init (&queues[i].priority_queue);
+      gomp_mutex_init (&queues[i].queue_lock);
+    }
   team->task_count = 0;
   team->task_queued_count = 0;
   team->task_running_count = 0;
   team->work_share_cancelled = 0;
   team->team_cancelled = 0;
+
+  struct gomp_task *implicit_task = gomp_team_implicit_task (team);
+  gomp_sem_init (&team->master_release, 0);
+  team->ordered_release = (void *) &implicit_task[nthreads];
+  team->ordered_release[0] = &team->master_release;
 
   return team;
 }
@@ -220,9 +227,15 @@ free_team (struct gomp_team *team)
   gomp_mutex_destroy (&team->work_share_list_free_lock);
 #endif
   gomp_barrier_destroy (&team->barrier);
-  gomp_mutex_destroy (&team->task_lock);
   gomp_mutex_destroy (&team->barrier_lock);
-  priority_queue_free (&team->task_queue);
+
+  struct gomp_taskqueue *queues = gomp_team_taskqueue (team);
+  for (int i = 0; i < team->num_taskqueue; ++i)
+    {
+      priority_queue_free (&queues[i].priority_queue);
+      gomp_mutex_destroy (&queues[i].queue_lock);
+    }
+
   free (team);
 }
 
@@ -351,7 +364,7 @@ gomp_team_start (void (*fn) (void *), void *data, unsigned nthreads,
   thr->ts.single_count = 0;
 #endif
   thr->ts.static_trip = 0;
-  thr->task = &team->implicit_task[0];
+  thr->task = &gomp_team_implicit_task (team)[0];
 #ifdef GOMP_NEEDS_THREAD_HANDLE
   thr->handle = pthread_self ();
 #endif
@@ -368,8 +381,10 @@ gomp_team_start (void (*fn) (void *), void *data, unsigned nthreads,
     bind_var = gomp_bind_var_list[thr->ts.level];
   gomp_init_task (thr->task, task, icv);
   thr->task->taskgroup = taskgroup;
-  team->implicit_task[0].icv.nthreads_var = nthreads_var;
-  team->implicit_task[0].icv.bind_var = bind_var;
+
+  struct gomp_task *implicit_task = gomp_team_implicit_task (team);
+  implicit_task[0].icv.nthreads_var = nthreads_var;
+  implicit_task[0].icv.bind_var = bind_var;
 
   if (nthreads == 1)
     return;
@@ -639,11 +654,11 @@ gomp_team_start (void (*fn) (void *), void *data, unsigned nthreads,
 	  nthr->ts.single_count = 0;
 #endif
 	  nthr->ts.static_trip = 0;
-	  nthr->task = &team->implicit_task[i];
+	  nthr->task = &implicit_task[i];
 	  nthr->place = place;
 	  gomp_init_task (nthr->task, task, icv);
-	  team->implicit_task[i].icv.nthreads_var = nthreads_var;
-	  team->implicit_task[i].icv.bind_var = bind_var;
+	  implicit_task[i].icv.nthreads_var = nthreads_var;
+	  implicit_task[i].icv.bind_var = bind_var;
 	  nthr->task->taskgroup = taskgroup;
 	  nthr->fn = fn;
 	  nthr->data = data;
@@ -826,10 +841,10 @@ gomp_team_start (void (*fn) (void *), void *data, unsigned nthreads,
       start_data->ts.single_count = 0;
 #endif
       start_data->ts.static_trip = 0;
-      start_data->task = &team->implicit_task[i];
+      start_data->task = &implicit_task[i];
       gomp_init_task (start_data->task, task, icv);
-      team->implicit_task[i].icv.nthreads_var = nthreads_var;
-      team->implicit_task[i].icv.bind_var = bind_var;
+      implicit_task[i].icv.nthreads_var = nthreads_var;
+      implicit_task[i].icv.bind_var = bind_var;
       start_data->task->taskgroup = taskgroup;
       start_data->thread_pool = pool;
       start_data->nested = nested;

@@ -470,6 +470,10 @@ struct gomp_task
      into the various queues to be scheduled.  */
   size_t num_dependees;
 
+  /* Number of unmet dependencies. Only used in 
+     gomp_task_maybe_wait_for_dependencies */
+  int num_awaited;
+
   /* Number of childrens created and queued from this task. */
   size_t num_children;
 
@@ -538,6 +542,16 @@ struct gomp_target_task
   void *hostaddrs[];
 };
 
+/* This structure describes the queues containing the tasks to be executed */
+
+struct gomp_taskqueue
+{
+  struct priority_queue priority_queue;
+
+  /* Lock protecting this specific queue. */
+  gomp_mutex_t queue_lock;
+};
+
 /* This structure describes a "team" of threads.  These are the threads
    that are spawned by a PARALLEL constructs, as well as the work sharing
    constructs that the team encounters.  */
@@ -602,9 +616,6 @@ struct gomp_team
      structs in the common case.  */
   struct gomp_work_share work_shares[8];
 
-  gomp_mutex_t task_lock;
-  /* Scheduled tasks.  */
-  struct priority_queue task_queue;
   /* Number of all GOMP_TASK_{WAITING,TIED} tasks in the team.  */
   unsigned int task_count;
   /* Number of GOMP_TASK_WAITING tasks currently waiting to be scheduled.  */
@@ -620,8 +631,13 @@ struct gomp_team
   int work_share_cancelled;
   int team_cancelled;
 
-  /* This array contains structures for implicit tasks.  */
-  struct gomp_task implicit_task[];
+  /* Bit size offset of the taskqueues. */
+  unsigned int num_taskqueue;
+
+  /* This array contains the taskqueues and the structures for implicit tasks.
+     The implicit tasks start from 
+     &implicit_task + sizeof (gomp_taskqueue) * num_taskqueue */
+  struct gomp_task taskqueues_and_implicit_tasks[];
 };
 
 /* This structure contains all data that is private to libgomp and is
@@ -840,6 +856,10 @@ extern bool gomp_create_target_task (struct gomp_device_descr *,
 				     enum gomp_target_task_state);
 extern struct gomp_taskgroup *gomp_parallel_reduction_register (uintptr_t *,
 								unsigned);
+void gomp_enqueue_task (struct gomp_task *task, struct gomp_team *team,
+			struct gomp_thread *thread, int priority);
+extern struct gomp_task *gomp_dequeue_task (struct gomp_team *team,
+					    struct gomp_thread *thread);
 extern void gomp_workshare_taskgroup_start (void);
 extern void gomp_workshare_task_reduction_register (uintptr_t *, uintptr_t *);
 
@@ -1231,74 +1251,19 @@ task_to_priority_node (struct gomp_task *task)
       ((char *) task + offsetof (struct gomp_task, pnode));
 }
 
-static inline struct gomp_task *
-gomp_dequeue_task (struct gomp_team *team)
+static inline struct gomp_taskqueue *
+gomp_team_taskqueue (struct gomp_team *team)
 {
-  struct gomp_task *task = NULL;
-
-  if (__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) == 0)
-    return NULL;
-
-  gomp_mutex_lock (&team->task_lock);
-
-#if _LIBGOMP_CHECKING_
-  priority_queue_verify (&team->task_queue, false);
-#endif
-
-  if (__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) == 0)
-    {
-    exit:;
-      gomp_mutex_unlock (&team->task_lock);
-      return NULL;
-    }
-
-  if (priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED))
-    goto exit;
-
-  task = priority_queue_next_task (&team->task_queue);
-
-  if (__atomic_load_n (&task->kind, MEMMODEL_ACQUIRE) != GOMP_TASK_WAITING)
-    goto exit;
-
-  priority_queue_remove (&team->task_queue, task, MEMMODEL_RELAXED);
-  if (__atomic_sub_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL) == 0)
-  {
-    /* Deadlock is not possible since the queue lock is not held in a
-       barrier_lock region. */
-    gomp_mutex_lock (&team->barrier_lock);
-    gomp_team_barrier_clear_task_pending (&team->barrier);
-    gomp_mutex_unlock (&team->barrier_lock);
-  }
-
-#if _LIBGOMP_CHECKING_
-  bool queue_count_zero
-    = __atomic_load_n (&team->task_queued_count, MEMMODEL_RELAXED) == 0;
-  bool queue_empty
-    = priority_queue_empty_p (&team->task_queue, MEMMODEL_RELAXED);
-
-  if ((queue_count_zero && !queue_empty)
-      || (!queue_count_zero && queue_empty))
-    gomp_fatal (
-      "gomp_dequeue_task: task_queued_count and task_queue do not match");
-#endif
-
-  task->pnode.next = NULL;
-  task->pnode.prev = NULL;
-  gomp_mutex_unlock (&team->task_lock);
-  return task;
+  return (struct gomp_taskqueue *) &team->taskqueues_and_implicit_tasks;
 }
 
-static inline void
-gomp_enqueue_task (struct gomp_task *task, struct gomp_team *team,
-		   int priority)
+static inline struct gomp_task *
+gomp_team_implicit_task (struct gomp_team *team)
 {
-  gomp_mutex_lock (&team->task_lock);
-  __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
-  priority_queue_insert (&team->task_queue, task, priority,
-			 PRIORITY_INSERT_END,
-			 task->parent_depends_on);
-  gomp_mutex_unlock (&team->task_lock);
-  return;
+
+  return (struct gomp_task*)
+      &((struct gomp_taskqueue *)
+       &team->taskqueues_and_implicit_tasks)[team->num_taskqueue];
 }
 
 #ifdef LIBGOMP_USE_PTHREADS

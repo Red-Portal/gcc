@@ -320,7 +320,7 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
-	  gomp_enqueue_task (task, team, task->priority);
+	  gomp_enqueue_task (task, team, thr, task->priority);
 	}
 
       gomp_mutex_lock (&team->barrier_lock);
