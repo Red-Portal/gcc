@@ -413,7 +413,7 @@ enum gomp_task_state
 {
   /* Some tasks are depending on this task. This task thus shouldn't be freed 
      yet before the children mark is as GOMP_STATE_FREE */
-  GOMP_STATE_ALIVE,
+  GOMP_STATE_NORMAL,
 
   /* The task is done executing. It can be freed once no thread is waiting
      in its semaphore and no children are left. */
@@ -421,9 +421,8 @@ enum gomp_task_state
 
   /* No thread is waiting on the task's semaphore and no children are left.
      The task is free to go. */
-  GOMP_STATE_FREE
+  GOMP_STATE_CRITICAL,
 };
-
 struct gomp_task_depend_entry
 {
   /* Address of dependency.  */
@@ -469,8 +468,10 @@ struct gomp_task
   struct htab *depend_hash;
   struct gomp_taskwait *taskwait;
 
-  /* Mutex protecting the depedency related data structures.
-     Only initialized if other tasks depend on this task. */
+  /* Mutex for protecting the dependency hash table and the lifecycle of the
+     task. The lock is taken whenever dependencies are updated and the 
+     a task lifecycle related critical section is entered (e.g. num_children 
+     became 0). */
   gomp_mutex_t depend_lock;
 
   /* Number of items in DEPEND.  */

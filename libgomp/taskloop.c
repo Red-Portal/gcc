@@ -216,14 +216,13 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 		task_step -= step;
 	      fn (arg);
 	      arg += arg_size;
-	      gomp_end_task ();
+	      gomp_maybe_end_task ();
 	    }
 	}
       else
 	for (i = 0; i < num_tasks; i++)
 	  {
 	    struct gomp_task task;
-
 	    gomp_init_task (&task, thr->task, gomp_icv (false));
 	    task.priority = priority;
 	    task.kind = GOMP_TASK_UNDEFERRED;
@@ -241,7 +240,7 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
 	    if (i == nfirst)
 	      task_step -= step;
 	    fn (data);
-	    gomp_end_task ();
+	    gomp_maybe_end_task (&task);
 	  }
     }
   else
@@ -250,7 +249,6 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       struct gomp_task *parent = thr->task;
       struct gomp_taskgroup *taskgroup = parent->taskgroup;
       char *arg;
-      int do_wake;
       unsigned long i;
 
       for (i = 0; i < num_tasks; i++)
@@ -319,32 +317,30 @@ GOMP_taskloop (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       __atomic_add_fetch (&parent->num_children, num_tasks, MEMMODEL_ACQ_REL);
       __atomic_add_fetch (&team->task_count, num_tasks, MEMMODEL_ACQ_REL);
 
-
       for (i = 0; i < num_tasks; i++)
 	{
 	  struct gomp_task *task = tasks[i];
 	  gomp_enqueue_task (task, team, task->priority);
 	}
 
-      gomp_mutex_lock (&team->task_lock);
+      gomp_mutex_lock (&team->barrier_lock);
       gomp_team_barrier_set_task_pending (&team->barrier);
-      gomp_mutex_unlock (&team->task_lock);
+      gomp_mutex_unlock (&team->barrier_lock);
 
       if (__atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
 	    + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
 	  < team->nthreads)
 	{
-	  do_wake
+	  int do_wake
 	    = team->nthreads
 	      - __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
 	      - !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE);
 	  if ((unsigned long) do_wake > num_tasks)
 	    do_wake = num_tasks;
+
+	  if (do_wake)
+	    gomp_team_barrier_wake (&team->barrier, do_wake);
 	}
-      else
-	do_wake = 0;
-      if (do_wake)
-	gomp_team_barrier_wake (&team->barrier, do_wake);
     }
   if ((flags & GOMP_TASK_FLAG_NOGROUP) == 0)
     ialias_call (GOMP_taskgroup_end) ();
