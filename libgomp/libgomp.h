@@ -444,17 +444,6 @@ struct gomp_dependers_vec
   struct gomp_task *elem[];
 };
 
-/* Used when in GOMP_taskwait or in gomp_task_maybe_wait_for_dependencies.  */
-
-struct gomp_taskwait
-{
-  bool in_taskwait;
-  bool in_depend_wait;
-  /* Number of tasks we are waiting for.  */
-  size_t n_depend;
-  gomp_sem_t taskwait_sem;
-};
-
 /* This structure describes a "task" to be run by a thread.  */
 
 struct gomp_task
