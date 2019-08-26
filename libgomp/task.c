@@ -133,7 +133,7 @@ gomp_enqueue_task (struct gomp_task *task, struct gomp_team *team,
   int qid = thr->ts.team_id;
   struct gomp_taskqueue *queue = gomp_team_taskqueue (team);
 
-  /* If the dedicated queue is busy, queue the task to another queue. */
+  /* If the dedicated queue is busy, queue the task to a random queue. */
   while (!gomp_mutex_trylock (&queue[qid].queue_lock))
     qid = rand () % team->nthreads;
   __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
@@ -212,9 +212,9 @@ gomp_dequeue_task (struct gomp_team *team, struct gomp_thread *thr)
     {
       /* Deadlock is not possible since the queue lock is not held in a
 	 barrier_lock region. */
-      gomp_mutex_lock (&team->barrier_lock);
+      //gomp_mutex_lock (&team->barrier_lock);
       gomp_team_barrier_clear_task_pending (&team->barrier);
-      gomp_mutex_unlock (&team->barrier_lock);
+      //gomp_mutex_unlock (&team->barrier_lock);
       return task;
     }
 
@@ -577,9 +577,9 @@ GOMP_task (void (*fn) (void *), void *data, void (*cpyfn) (void *, void *),
       __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
       gomp_enqueue_task (task, team, thr, task->priority);
 
-      gomp_mutex_lock (&team->barrier_lock);
+      //gomp_mutex_lock (&team->barrier_lock);
       gomp_team_barrier_set_task_pending (&team->barrier);
-      gomp_mutex_unlock (&team->barrier_lock);
+      //gomp_mutex_unlock (&team->barrier_lock);
 
       if (__atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
 	        + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
@@ -619,7 +619,7 @@ static void gomp_target_task_completion (struct gomp_team *team,
   __atomic_store_n (&task->kind, GOMP_TASK_WAITING, MEMMODEL_RELEASE);
   gomp_enqueue_task (task, team, thread, task->priority);
 
-  gomp_mutex_lock (&team->barrier_lock);
+  //gomp_mutex_lock (&team->barrier_lock);
   gomp_team_barrier_set_task_pending (&team->barrier);
 
   /* I'm afraid this can't be done after releasing team->barrier_lock,
@@ -631,7 +631,7 @@ static void gomp_target_task_completion (struct gomp_team *team,
     {
       gomp_team_barrier_wake (&team->barrier, 1);
     }
-  gomp_mutex_unlock (&team->barrier_lock);
+  //gomp_mutex_unlock (&team->barrier_lock);
 }
 
 /* Signal that a target task TTASK has completed the asynchronously
@@ -843,9 +843,9 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
   __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
   gomp_enqueue_task (task, team, thr, task->priority);
 
-  gomp_mutex_lock (&team->barrier_lock);
+  //gomp_mutex_lock (&team->barrier_lock);
   gomp_team_barrier_set_task_pending (&team->barrier);
-  gomp_mutex_unlock (&team->barrier_lock);
+  //gomp_mutex_unlock (&team->barrier_lock);
   do_wake = __atomic_load_n (&team->task_running_count, MEMMODEL_ACQUIRE)
 	      + !__atomic_load_n (&parent->in_tied_task, MEMMODEL_ACQUIRE)
 	    < team->nthreads;
@@ -1125,19 +1125,19 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
   struct gomp_task *task = thr->task;
   struct gomp_task *next_task = NULL;
 
-  gomp_mutex_lock (&team->barrier_lock);
+  //gomp_mutex_lock (&team->barrier_lock);
   if (gomp_barrier_last_thread (state))
     {
       if (__atomic_load_n (&team->task_count, MEMMODEL_ACQUIRE) == 0)
 	{
 	  gomp_team_barrier_done (&team->barrier, state);
-	  gomp_mutex_unlock (&team->barrier_lock);
+	  //gomp_mutex_unlock (&team->barrier_lock);
 	  gomp_team_barrier_wake (&team->barrier, 0);
 	  return;
 	}
       gomp_team_barrier_set_waiting_for_tasks (&team->barrier);
     }
-  gomp_mutex_unlock (&team->barrier_lock);
+  //gomp_mutex_unlock (&team->barrier_lock);
 
   while (true)
     {
@@ -1210,18 +1210,18 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	    gomp_team_barrier_wake (&team->barrier, do_wake);
 	}
 
-      gomp_mutex_lock (&team->barrier_lock);
+      //gomp_mutex_lock (&team->barrier_lock);
       bool signal_barrier
 	= __atomic_sub_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL) == 0
 	  && gomp_team_barrier_waiting_for_tasks (&team->barrier);
       if (signal_barrier)
 	{
 	  gomp_team_barrier_done (&team->barrier, state);
-	  gomp_mutex_unlock (&team->barrier_lock);
+	  //gomp_mutex_unlock (&team->barrier_lock);
 	  gomp_team_barrier_wake (&team->barrier, 0);
 	}
-      else
-	gomp_mutex_unlock (&team->barrier_lock);
+      //else
+	  //gomp_mutex_unlock (&team->barrier_lock);
 
       /* If the task don't have any children and nobody is in the critical
 	 section, task->state is GOMP_STATE_NORMAL. Then we can free it right
