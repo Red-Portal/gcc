@@ -147,6 +147,7 @@ inline static struct gomp_task *
 gomp_dequeue_task_from_queue (int qid, struct gomp_team *team)
 {
   struct gomp_task *task = NULL;
+  qid = rand () % team->nthreads;
   struct gomp_taskqueue *queue = &gomp_team_taskqueue (team)[qid];
 
   if (priority_queue_empty_p (&queue->priority_queue, MEMMODEL_ACQUIRE))
