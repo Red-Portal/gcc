@@ -185,7 +185,8 @@ gomp_dequeue_task (struct gomp_team *team, struct gomp_thread *thr)
   if (__atomic_load_n (&team->task_queued_count, MEMMODEL_ACQUIRE) == 0)
     return NULL;
 
-  int qid = thr->ts.team_id;
+  int tid = thr->ts.team_id;
+  int qid = tid;
   struct gomp_task *task = NULL;
 
   task = gomp_dequeue_task_from_queue (qid, team);
@@ -199,7 +200,8 @@ gomp_dequeue_task (struct gomp_team *team, struct gomp_thread *thr)
 	 math.h rand is not the best prng in the world but is simple enough
 	 for our purpose. */
 
-      qid = rand () % team->nthreads;
+      while (qid == tid)
+	qid = rand () % team->nthreads;
       task = gomp_dequeue_task_from_queue (qid, team);
     }
 
