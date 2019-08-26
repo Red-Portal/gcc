@@ -786,7 +786,7 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
 	{
 	  if (taskgroup)
 	    __atomic_add_fetch (&taskgroup->num_children, 1,
-				MEMMODEL_SEQ_CST);
+				MEMMODEL_ACQ_REL);
 	  return true;
 	}
     }
@@ -799,7 +799,7 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
     }
 
   if (taskgroup)
-    __atomic_add_fetch (&taskgroup->num_children, 1, MEMMODEL_SEQ_CST);
+    __atomic_add_fetch (&taskgroup->num_children, 1, MEMMODEL_ACQ_REL);
 
   /* For async offloading, if we don't need to wait for dependencies,
      run the gomp_target_task_fn right away, essentially schedule the
@@ -808,8 +808,8 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
       && (devicep->capabilities & GOMP_OFFLOAD_CAP_OPENMP_400))
     {
       __atomic_store_n (&task->kind, GOMP_TASK_TIED, MEMMODEL_RELEASE);
-      __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
-      __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
+      __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
+      __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
 
       thr->task = task;
       gomp_target_task_fn (task->fn_data);
@@ -834,8 +834,8 @@ gomp_create_target_task (struct gomp_device_descr *devicep, void (*fn) (void *),
       return true;
     }
 
-  __atomic_add_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
-  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
+  __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
+  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
   gomp_enqueue_task (task, team, thr, task->priority);
 
   gomp_mutex_lock (&team->barrier_lock);
@@ -926,12 +926,12 @@ gomp_task_run_post_handle_dependers (struct gomp_task *child_task,
 	 TASK's remaining dependencies.  Once TASK has no other
 	 depenencies, put it into the various queues so it will get
 	 scheduled for execution.  */
-      if (__atomic_sub_fetch (&task->num_dependees, 1, MEMMODEL_SEQ_CST) != 0)
+      if (__atomic_sub_fetch (&task->num_dependees, 1, MEMMODEL_ACQ_REL) != 0)
 	continue;
 
       __atomic_add_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
       if (parent)
-	  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
+	  __atomic_add_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
 
       gomp_enqueue_task (task, team, thr, task->priority);
       ++ret;
@@ -986,7 +986,7 @@ gomp_task_run_post_notify_parent (struct gomp_task *child_task)
       enum gomp_task_state state
 	= __atomic_exchange_n (&parent->state, GOMP_STATE_CRITICAL,
 			       MEMMODEL_ACQ_REL);
-      __atomic_sub_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
+      __atomic_sub_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
       /* Enter critical section */
       if (state == GOMP_STATE_DONE)
 	{
@@ -1007,7 +1007,7 @@ gomp_task_run_post_notify_parent (struct gomp_task *child_task)
       /* Exit critical section */
     }
   else
-    __atomic_sub_fetch (&parent->num_children, 1, MEMMODEL_SEQ_CST);
+    __atomic_sub_fetch (&parent->num_children, 1, MEMMODEL_ACQ_REL);
 }
 
 /* Notify taskgroup that a children has finished executing.  */
@@ -1018,7 +1018,7 @@ gomp_task_run_post_notify_taskgroup (struct gomp_task *child_task)
   struct gomp_taskgroup *taskgroup = child_task->taskgroup;
   if (taskgroup == NULL)
     return;
-  __atomic_sub_fetch (&taskgroup->num_children, 1, MEMMODEL_SEQ_CST);
+  __atomic_sub_fetch (&taskgroup->num_children, 1, MEMMODEL_ACQ_REL);
 }
 
 /* Executes all tasks until the team queue is empty. 
@@ -1080,7 +1080,7 @@ finish_cancelled:;
   gomp_task_run_post_notify_parent (next_task);
   gomp_task_run_post_notify_taskgroup (next_task);
 
-  __atomic_sub_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST);
+  __atomic_sub_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL);
   if (new_tasks > 1)
     {
       int do_wake
@@ -1102,7 +1102,7 @@ finish_cancelled:;
 
   if (__atomic_load_n (&next_task->num_children, MEMMODEL_ACQUIRE) == 0
       && __atomic_exchange_n (&next_task->state, GOMP_STATE_DONE,
-			      MEMMODEL_SEQ_CST)
+			      MEMMODEL_ACQ_REL)
 	   == GOMP_STATE_NORMAL)
     {
       gomp_finish_task (next_task);
@@ -1147,7 +1147,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	  goto finish_cancelled;
 	}
 
-      __atomic_add_fetch (&team->task_running_count, 1, MEMMODEL_SEQ_CST);
+      __atomic_add_fetch (&team->task_running_count, 1, MEMMODEL_ACQ_REL);
       __atomic_store_n (&next_task->in_tied_task, true, MEMMODEL_RELEASE);
 
       thr->task = next_task;
@@ -1159,7 +1159,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 	      __atomic_store_n (&next_task->kind, GOMP_TASK_ASYNC_RUNNING,
 				MEMMODEL_RELEASE);
 	      __atomic_sub_fetch (&team->task_running_count, 1,
-				  MEMMODEL_SEQ_CST);
+				  MEMMODEL_ACQ_REL);
 	      struct gomp_target_task *ttask
 		= (struct gomp_target_task *) next_task->fn_data;
 	      /* If GOMP_PLUGIN_target_task_completion has run already
@@ -1191,7 +1191,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
       gomp_task_run_post_notify_taskgroup (next_task);
 
       if (!cancelled)
-	__atomic_sub_fetch (&team->task_running_count, 1, MEMMODEL_SEQ_CST);
+	__atomic_sub_fetch (&team->task_running_count, 1, MEMMODEL_ACQ_REL);
 
       if (new_tasks > 1)
 	{
@@ -1207,7 +1207,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 
       gomp_mutex_lock (&team->barrier_lock);
       bool signal_barrier
-	= __atomic_sub_fetch (&team->task_count, 1, MEMMODEL_SEQ_CST) == 0
+	= __atomic_sub_fetch (&team->task_count, 1, MEMMODEL_ACQ_REL) == 0
 	  && gomp_team_barrier_waiting_for_tasks (&team->barrier);
       if (signal_barrier)
 	{
@@ -1226,7 +1226,7 @@ gomp_barrier_handle_tasks (gomp_barrier_state_t state)
 
       if (__atomic_load_n (&next_task->num_children, MEMMODEL_ACQUIRE) == 0
 	  && __atomic_exchange_n (&next_task->state, GOMP_STATE_DONE,
-				  MEMMODEL_SEQ_CST)
+				  MEMMODEL_ACQ_REL)
 	       == GOMP_STATE_NORMAL)
 	{
 	  gomp_finish_task (next_task);

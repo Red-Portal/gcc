@@ -38,7 +38,7 @@
 
 #ifndef _LIBGOMP_CHECKING_
 /* Define to 1 to perform internal sanity checks.  */
-#define _LIBGOMP_CHECKING_ 1
+#define _LIBGOMP_CHECKING_ 0
 #endif
 
 #include "config.h"
@@ -423,6 +423,7 @@ enum gomp_task_state
      The task is free to go. */
   GOMP_STATE_CRITICAL,
 };
+
 struct gomp_task_depend_entry
 {
   /* Address of dependency.  */
@@ -460,7 +461,7 @@ struct gomp_task
   /* Mutex for protecting the dependency hash table and the lifecycle of the
      task. The lock is taken whenever dependencies are updated and the 
      a task lifecycle related critical section is entered (e.g. num_children 
-     became 0). */
+     becomes 0). */
   gomp_mutex_t depend_lock;
 
   /* Number of items in DEPEND.  */
@@ -631,7 +632,7 @@ struct gomp_team
   int work_share_cancelled;
   int team_cancelled;
 
-  /* Bit size offset of the taskqueues. */
+  /* Number of taskqueues. */
   unsigned int num_taskqueue;
 
   /* This array contains the taskqueues and the structures for implicit tasks.
