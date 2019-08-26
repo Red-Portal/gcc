@@ -148,6 +148,10 @@ gomp_dequeue_task_from_queue (int qid, struct gomp_team *team)
 {
   struct gomp_task *task = NULL;
   struct gomp_taskqueue *queue = &gomp_team_taskqueue (team)[qid];
+
+  if (priority_queue_empty_p (&queue->priority_queue, MEMMODEL_ACQUIRE))
+    return NULL;
+
   gomp_mutex_lock (&queue->queue_lock);
 
 #if _LIBGOMP_CHECKING_
