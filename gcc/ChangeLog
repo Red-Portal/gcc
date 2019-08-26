@@ -1,3 +1,15 @@
+2019-08-26  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/91526
+	* passes.def: Note that after late FRE we do TODO_update_address_taken.
+	* tree-ssa-sccvn.c (pass_fre::execute): In late mode schedule
+	TODO_update_address_taken.
+
+2019-08-26  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* config/i386/gmm_malloc.h: Only use <errno.h> and errno if
+	__STDC_HOSTED__.
+
 2019-08-23  Mihailo Stojanovic  <mistojanovic@wavecomp.com>
 
 	* config/mips/mips.md (mips_get_fcsr, *mips_get_fcsr): Use SI
