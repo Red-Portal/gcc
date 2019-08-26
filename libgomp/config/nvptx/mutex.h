@@ -52,6 +52,12 @@ gomp_mutex_lock (gomp_mutex_t *mutex)
     /* spin */ ;
 }
 
+static inline int
+gomp_mutex_trylock (gomp_mutex_t *mutex)
+{
+  return !__sync_lock_test_and_set (mutex, 1);
+}
+
 static inline void
 gomp_mutex_unlock (gomp_mutex_t *mutex)
 {

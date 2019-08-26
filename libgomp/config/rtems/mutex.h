@@ -44,6 +44,11 @@ static inline void gomp_mutex_lock (gomp_mutex_t *mutex)
   _Mutex_Acquire (mutex);
 }
 
+static inline int gomp_mutex_trylock (gomp_mutex_t *mutex)
+{
+  return !_Mutex_Try_acquire (mutex);
+}
+
 static inline void gomp_mutex_unlock (gomp_mutex_t *mutex)
 {
   _Mutex_Release (mutex);

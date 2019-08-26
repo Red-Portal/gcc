@@ -130,14 +130,16 @@ void
 gomp_enqueue_task (struct gomp_task *task, struct gomp_team *team,
 		   struct gomp_thread *thr, int priority)
 {
-  int tid = thr->ts.team_id;
-  struct gomp_taskqueue *queue = &gomp_team_taskqueue (team)[tid];
+  int qid = thr->ts.team_id;
+  struct gomp_taskqueue *queue = gomp_team_taskqueue (team);
 
+  /* If the dedicated queue is busy, queue the task to another queue. */
+  while (!gomp_mutex_trylock (&queue[qid].queue_lock))
+    qid = rand () % team->nthreads;
   __atomic_add_fetch (&team->task_queued_count, 1, MEMMODEL_ACQ_REL);
-  gomp_mutex_lock (&queue->queue_lock);
-  priority_queue_insert (&queue->priority_queue, task, priority,
+  priority_queue_insert (&queue[qid].priority_queue, task, priority,
 			 PRIORITY_INSERT_END, task->parent_depends_on);
-  gomp_mutex_unlock (&queue->queue_lock);
+  gomp_mutex_unlock (&queue[qid].queue_lock);
   return;
 }
 
@@ -147,13 +149,11 @@ inline static struct gomp_task *
 gomp_dequeue_task_from_queue (int qid, struct gomp_team *team)
 {
   struct gomp_task *task = NULL;
-  qid = rand () % team->nthreads;
   struct gomp_taskqueue *queue = &gomp_team_taskqueue (team)[qid];
 
-  if (priority_queue_empty_p (&queue->priority_queue, MEMMODEL_ACQUIRE))
+  if (priority_queue_empty_p (&queue->priority_queue, MEMMODEL_ACQUIRE)
+      || !gomp_mutex_trylock (&queue->queue_lock))
     return NULL;
-
-  gomp_mutex_lock (&queue->queue_lock);
 
 #if _LIBGOMP_CHECKING_
   priority_queue_verify (&queue->priority_queue, false);

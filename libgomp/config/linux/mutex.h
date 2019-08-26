@@ -57,6 +57,14 @@ gomp_mutex_lock (gomp_mutex_t *mutex)
     gomp_mutex_lock_slow (mutex, oldval);
 }
 
+static inline int
+gomp_mutex_trylock (gomp_mutex_t *mutex)
+{
+  int oldval = 0;
+  return __atomic_compare_exchange_n (mutex, &oldval, 1, false,
+				      MEMMODEL_ACQ_REL, MEMMODEL_ACQUIRE);
+}
+
 static inline void
 gomp_mutex_unlock (gomp_mutex_t *mutex)
 {

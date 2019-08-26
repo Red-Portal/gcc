@@ -40,6 +40,11 @@ static inline void gomp_mutex_init (gomp_mutex_t *mutex)
   pthread_mutex_init (mutex, NULL);
 }
 
+static inline int gomp_mutex_trylock (gomp_mutex_t *mutex)
+{
+  return pthread_mutex_trylock (mutex);
+}
+
 static inline void gomp_mutex_lock (gomp_mutex_t *mutex)
 {
   pthread_mutex_lock (mutex);
